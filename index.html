@@ -89,7 +89,7 @@ body{height:100vh;display:flex;flex-direction:column}
     outline:none !important;
     image-rendering:auto !important;
 }
-.leaflet-container{background:#1f2937}
+.leaflet-container{background:#1f2937;touch-action:pan-y}
 .leaflet-tile{border:none !important;outline:none !important}
 .leaflet-pane img{image-rendering:auto}
 #side{width:360px;padding:15px;box-sizing:border-box;background:#111827}
@@ -265,9 +265,25 @@ let backendConnected = true;
 const API = "https://marathon-tracker.tail75edaa.ts.net";
 const DEFAULT_LAT = 51.61844288587238;
 const DEFAULT_LNG = -3.027420043945313;
-const DEFAULT_ZOOM = 12;
-const mainMap=L.map('mainMap',{zoomControl:false,attributionControl:false});
-const miniMap=L.map('miniMap',{zoomControl:false,attributionControl:false});
+const DESKTOP_OVERVIEW_ZOOM = 12;
+const MOBILE_OVERVIEW_ZOOM = 11;
+const DESKTOP_RUNNER_ZOOM = 15;
+const MOBILE_RUNNER_ZOOM = 14;
+const DESKTOP_MINI_ZOOM = 17;
+const MOBILE_MINI_ZOOM = 16;
+const lockedMapOptions = {
+    zoomControl:false,
+    attributionControl:false,
+    dragging:false,
+    touchZoom:false,
+    scrollWheelZoom:false,
+    doubleClickZoom:false,
+    boxZoom:false,
+    keyboard:false,
+    tap:false
+};
+const mainMap=L.map('mainMap', lockedMapOptions);
+const miniMap=L.map('miniMap', lockedMapOptions);
 
 L.tileLayer(
 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
@@ -306,12 +322,19 @@ let remainingRoute=L.polyline(
 let routeCoords = [];
 let milestoneMarkers = [];
 
-let gpsMarker=L.marker([0,0],{icon}).addTo(miniMap);
+let gpsMarker=L.marker(
+    [0,0],
+    {
+        icon,
+        interactive:false
+    }
+).addTo(miniMap);
 
 let mainGpsMarker=L.marker(
     [0,0],
     {
         icon:icon,
+        interactive:false,
         zIndexOffset:1000
     }
 ).addTo(mainMap);
@@ -323,6 +346,38 @@ let miniRouteLine=L.polyline(
         color:'#3b82f6'
     }
 ).addTo(miniMap);
+
+function isMobileViewport(){
+    return window.matchMedia('(max-width: 700px)').matches;
+}
+
+function overviewZoom(){
+    return isMobileViewport()
+        ? MOBILE_OVERVIEW_ZOOM
+        : DESKTOP_OVERVIEW_ZOOM;
+}
+
+function runnerZoom(){
+    return isMobileViewport()
+        ? MOBILE_RUNNER_ZOOM
+        : DESKTOP_RUNNER_ZOOM;
+}
+
+function miniRunnerZoom(){
+    return isMobileViewport()
+        ? MOBILE_MINI_ZOOM
+        : DESKTOP_MINI_ZOOM;
+}
+
+function setOverviewView(){
+    mainMap.setView(
+        [DEFAULT_LAT, DEFAULT_LNG],
+        overviewZoom(),
+        {
+            animate:false
+        }
+    );
+}
 
 function api(path){
     return `${API}${path}`;
@@ -367,10 +422,7 @@ routeCoords = route.map(
 remainingRoute.setLatLngs(routeCoords);
 miniRouteLine.setLatLngs(routeCoords);
 await loadMilestones();
- mainMap.setView(
-    [DEFAULT_LAT, DEFAULT_LNG],
-    DEFAULT_ZOOM
-);
+setOverviewView();
 remainingRoute.bringToFront();
 completedRoute.bringToFront();
 mainGpsMarker.setZIndexOffset(1000);
@@ -492,7 +544,13 @@ else{
 
 mainGpsMarker.setLatLng([p.lat,p.lon]);
 
-miniMap.setView([p.lat,p.lon],17);
+miniMap.setView(
+    [p.lat,p.lon],
+    miniRunnerZoom(),
+    {
+        animate:false
+    }
+);
 }
 
 }
@@ -521,17 +579,17 @@ function cinematicZoom(){
         // Snap to runner
         mainMap.setView(
             [p.lat, p.lon],
-            15
+            runnerZoom(),
+            {
+                animate:false
+            }
         );
 
         // Stay there 15 seconds
         setTimeout(() => {
 
             // Snap back to overview
-            mainMap.setView(
-                [DEFAULT_LAT, DEFAULT_LNG],
-                DEFAULT_ZOOM
-            );
+            setOverviewView();
 
             cinematicMode = false;
 
@@ -566,6 +624,16 @@ async function pollHealth(){
 loadRoute().catch(
     () => setBackendConnected(false)
 );
+
+window.addEventListener('resize', () => {
+    mainMap.invalidateSize();
+    miniMap.invalidateSize();
+
+    if(!cinematicMode){
+        setOverviewView();
+    }
+});
+
 function renderRouteProgress(stats){
 
     if(routeCoords.length === 0) return;
