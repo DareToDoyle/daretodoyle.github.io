@@ -2,17 +2,20 @@
 <html>
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>300KM Challenge Finale</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 <style>
-html,body{margin:0;height:100%;background:#0b0f14;color:#fff;font-family:Arial,sans-serif;overflow:hidden}
+html,body{margin:0;min-height:100%;background:#0b0f14;color:#fff;font-family:Arial,sans-serif;overflow:hidden}
+body{height:100vh;display:flex;flex-direction:column}
 #header{
     position:relative;
-    height:110px;
+    min-height:110px;
     background:#121821;
     padding:15px 25px;
     box-sizing:border-box;
+    flex:0 0 auto;
 }
 .card.gps{
     min-width:120px;
@@ -26,6 +29,34 @@ html,body{margin:0;height:100%;background:#0b0f14;color:#fff;font-family:Arial,s
     font-size:18px;
     color:#9ca3af;
 }
+#statusBadge{
+    display:inline-flex;
+    align-items:center;
+    gap:7px;
+    margin-top:8px;
+    padding:5px 9px;
+    border:1px solid #14532d;
+    border-radius:999px;
+    background:#052e16;
+    color:#bbf7d0;
+    font-size:12px;
+    font-weight:700;
+}
+#statusBadge::before{
+    content:"";
+    width:8px;
+    height:8px;
+    border-radius:50%;
+    background:#22c55e;
+}
+#statusBadge.disconnected{
+    border-color:#7f1d1d;
+    background:#450a0a;
+    color:#fecaca;
+}
+#statusBadge.disconnected::before{
+    background:#ef4444;
+}
 
 #cards{
     position:absolute;
@@ -33,9 +64,9 @@ html,body{margin:0;height:100%;background:#0b0f14;color:#fff;font-family:Arial,s
     right:25px;
     transform:translateY(-50%);
     display:flex;
-    gap:24px;
+    gap:16px;
 }
-.card{background:#1a2230;border:1px solid #2f3a4e;border-radius:12px;padding:10px 16px;min-width:180px}
+.card{background:#1a2230;border:1px solid #2f3a4e;border-radius:12px;padding:10px 16px;min-width:160px;box-sizing:border-box}
 .label{font-size:12px;color:#9ca3af}
 .value{font-size:28px;font-weight:700}
 #progressWrapFooter{
@@ -46,7 +77,8 @@ html,body{margin:0;height:100%;background:#0b0f14;color:#fff;font-family:Arial,s
 #progressText{text-align:center;margin-bottom:6px}
 #content{
     display:flex;
-    height:calc(100% - 180px)
+    flex:1 1 auto;
+    min-height:0;
 }
 #mainMap{
     flex:1;
@@ -64,12 +96,13 @@ html,body{margin:0;height:100%;background:#0b0f14;color:#fff;font-family:Arial,s
 #miniTitle{font-weight:700;margin-bottom:10px}
 #miniMap{height:280px;border-radius:10px;border:2px solid #374151}
 #footer{
-    height:70px;
+    min-height:70px;
     background:#121821;
     display:flex;
     align-items:center;
     padding:0 25px;
     box-sizing:border-box;
+    flex:0 0 auto;
 }
 .live-dot{
     width:9px;
@@ -110,13 +143,78 @@ html,body{margin:0;height:100%;background:#0b0f14;color:#fff;font-family:Arial,s
     line-height:28px;
     filter:drop-shadow(0 2px 3px rgba(0,0,0,.55));
 }
-button{background:#2563eb;color:#fff;border:none;padding:10px 16px;border-radius:8px;cursor:pointer}
+button{background:#2563eb;color:#fff;border:none;padding:12px 16px;border-radius:8px;cursor:pointer;min-height:44px}
+@media (max-width: 1100px){
+    html,body{overflow:auto}
+    body{height:auto;min-height:100vh}
+    #header{
+        min-height:0;
+        padding:14px 16px;
+    }
+    #title{
+        font-size:clamp(24px, 7vw, 34px);
+        line-height:1.05;
+    }
+    #subtitle{
+        font-size:15px;
+    }
+    #cards{
+        position:static;
+        transform:none;
+        display:grid;
+        grid-template-columns:repeat(2, minmax(0, 1fr));
+        gap:10px;
+        margin-top:14px;
+    }
+    .card,
+    .card.gps{
+        min-width:0;
+        padding:10px 12px;
+    }
+    .value{
+        font-size:clamp(20px, 6vw, 28px);
+        line-height:1.15;
+    }
+    #content{
+        flex-direction:column;
+        min-height:560px;
+    }
+    #mainMap{
+        min-height:360px;
+    }
+    #side{
+        width:100%;
+        padding:12px 16px 16px;
+    }
+    #miniMap{
+        height:220px;
+    }
+    #footer{
+        position:sticky;
+        bottom:0;
+        min-height:76px;
+        padding:0 16px;
+        z-index:1000;
+    }
+}
+@media (max-width: 430px){
+    #cards{
+        grid-template-columns:1fr;
+    }
+    #mainMap{
+        min-height:340px;
+    }
+    #miniMap{
+        height:190px;
+    }
+}
 </style>
 </head>
 <body>
 <div id="header">
 <div id="title">300KM CHALLENGE FINALE</div>
 <div id="subtitle">MARATHON DAY</div>
+<div id="statusBadge">Connected</div>
 <div id="cards">
 <div class="card">
     <div class="label">DISTANCE</div>
@@ -163,7 +261,8 @@ button{background:#2563eb;color:#fff;border:none;padding:10px 16px;border-radius
 <script>
 let cinematicMode = false;
 let marathonFinished = false;
-const API = "http://127.0.0.1:8000";
+let backendConnected = true;
+const API = "https://marathon-tracker.tail75edaa.ts.net";
 const DEFAULT_LAT = 51.61844288587238;
 const DEFAULT_LNG = -3.027420043945313;
 const DEFAULT_ZOOM = 12;
@@ -225,9 +324,42 @@ let miniRouteLine=L.polyline(
     }
 ).addTo(miniMap);
 
+function api(path){
+    return `${API}${path}`;
+}
+
+function setBackendConnected(isConnected){
+    backendConnected = isConnected;
+    statusBadge.classList.toggle(
+        'disconnected',
+        !isConnected
+    );
+    statusBadge.innerText = isConnected
+        ? 'Connected'
+        : 'Disconnected';
+
+    if(!isConnected){
+        lastgps.innerText = 'Disconnected';
+    }
+}
+
+async function fetchJson(path, options){
+    const response = await fetch(
+        api(path),
+        options
+    );
+
+    if(!response.ok){
+        throw new Error(
+            `Request failed: ${response.status}`
+        );
+    }
+
+    return response.json();
+}
+
 async function loadRoute(){
- const r=await fetch(`${API}/route`)
- const route=await r.json();
+ const route=await fetchJson('/route');
 routeCoords = route.map(
     p => [p.lat,p.lon]
 );
@@ -246,8 +378,7 @@ mainGpsMarker.setZIndexOffset(1000);
 
 async function loadMilestones(){
 
-    const response = await fetch(`${API}/milestones`);
-    const milestones = await response.json();
+    const milestones = await fetchJson('/milestones');
 
     milestoneMarkers.forEach(
         marker => marker.remove()
@@ -300,7 +431,8 @@ function formatElapsedSeconds(totalSeconds){
 
 async function update(){
 
- const stats=await (await fetch(`${API}/stats`)).json();
+try{
+ const stats=await fetchJson('/stats');
 
  elapsed.innerText = formatElapsedSeconds(
     stats.elapsed_seconds || 0
@@ -313,9 +445,12 @@ if(
 
     marathonFinished = true;
 
-    await fetch(`${API}/hide-capture`, {
-        method: "POST"
-    });
+    try{
+        await fetch(api('/hide-capture'), {
+            method: "POST"
+        });
+    }
+    catch(error){}
 
     elapsed.innerText = formatElapsedSeconds(
         stats.elapsed_seconds || 0
@@ -348,17 +483,10 @@ else{
 
 
 
- const pts=await (await fetch(`${API}/points`)).json();
+ const pts=await fetchJson('/points');
  if(pts.length){
 
    const p=pts[pts.length-1];
-   console.log(
-    "GPS:",
-    p.lat,
-    p.lon,
-    "Progress:",
-    stats.progress
-);
 
    gpsMarker.setLatLng([p.lat,p.lon]);
 
@@ -368,13 +496,18 @@ miniMap.setView([p.lat,p.lon],17);
 }
 
 }
+catch(error){
+    setBackendConnected(false);
+}
+
+}
 function cinematicZoom(){
 
     if(cinematicMode) return;
 
     cinematicMode = true;
 
-    fetch('/points')
+    fetch(api('/points'))
     .then(r => r.json())
     .then(points => {
 
@@ -404,15 +537,35 @@ function cinematicZoom(){
 
         }, 15000);
 
+    })
+    .catch(() => {
+        cinematicMode = false;
+        setBackendConnected(false);
     });
 }
 
 async function newMarathon(){
  if(!confirm('Start a new marathon?')) return;
- await fetch(`${API}/new-marathon`,{method:'POST'});
+ await fetch(api('/new-marathon'),{method:'POST'});
  location.reload();
 }
-loadRoute();
+async function pollHealth(){
+    try{
+        const health = await fetchJson('/health');
+        setBackendConnected(
+            health.status === 'ok'
+            && health.gps_connected
+            && health.route_loaded
+        );
+    }
+    catch(error){
+        setBackendConnected(false);
+    }
+}
+
+loadRoute().catch(
+    () => setBackendConnected(false)
+);
 function renderRouteProgress(stats){
 
     if(routeCoords.length === 0) return;
@@ -459,6 +612,8 @@ remainingRoute.setLatLngs(
 }
 update();
 setInterval(update,1000);
+pollHealth();
+setInterval(pollHealth,10000);
 setInterval(cinematicZoom,30000);
 </script>
 </body>
