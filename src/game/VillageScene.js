@@ -18,13 +18,14 @@ import {
   createBuildingTextures,
   createMonumentTextures,
   createPlayerTexture,
+  createPoiSignTextures,
   createPropTextures,
   createTileTextures,
   createWorldGroundTexture,
   PIXEL_PALETTE,
 } from './pixelAssets'
 
-const PLAYER_SPEED = 58
+const PLAYER_SPEED = 60
 const PLAYER_BODY_SIZE = 8
 
 function tileCenter(tile) {
@@ -52,6 +53,7 @@ export function createVillageScene(callbacks) {
       createPropTextures(this)
       createPlayerTexture(this)
       createBuildingTextures(this, pois)
+      createPoiSignTextures(this, pois)
       createMonumentTextures(this)
 
       this.createTileMap()
@@ -60,8 +62,9 @@ export function createVillageScene(callbacks) {
       this.createInput()
       this.createCamera()
 
-      this.physics.add.collider(this.player, this.collisionLayer)
-      this.physics.add.collider(this.player, this.obstacles)
+      this.physics.add.collider(this.playerBody, this.collisionLayer)
+      this.physics.add.collider(this.playerBody, this.obstacles)
+      this.events.on(Phaser.Scenes.Events.POST_UPDATE, this.syncVisual, this)
       this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.cleanup, this)
 
       this.time.delayedCall(80, () => callbacks.onReady?.())
@@ -117,20 +120,39 @@ export function createVillageScene(callbacks) {
 
     createBuildings() {
       pois.forEach((poi) => {
-        const [x, y] = poi.buildingPosition
+        const [x, y] = poi.position
         this.add
           .image(Math.round(x), Math.round(y), `building-${poi.id}`)
           .setOrigin(0.5, 1)
           .setDepth(Math.round(y))
-        this.addObstacle(x, y - 8, poi.id === 'lab' ? 62 : 54, 16)
+        const [signX, signY] = poi.signOffset
+        this.add
+          .image(Math.round(x + signX), Math.round(y + signY), `sign-${poi.id}`)
+          .setOrigin(0.5, 1)
+          .setDepth(Math.round(y + signY + 1))
+        this.addObstacle(x, y - 11, poi.id === 'lab' ? 82 : 76, 22)
+
+        if (this.callbacks.debug) {
+          this.add
+            .circle(poi.interactionPoint[0], poi.interactionPoint[1], poi.interactionRadius)
+            .setStrokeStyle(1, 0xffffff, 0.8)
+            .setFillStyle(0xffffff, 0.08)
+            .setDepth(9999)
+          this.add
+            .rectangle(poi.interactionPoint[0], poi.interactionPoint[1], 3, 3, 0xffffff)
+            .setDepth(10000)
+          this.add
+            .rectangle(x, y, 3, 3, 0x151514)
+            .setDepth(10000)
+        }
       })
     }
 
     createMonument() {
-      const x = tileCenter(56)
-      const y = tileCenter(39)
+      const x = tileCenter(39)
+      const y = tileCenter(29)
       this.add.image(x, y, 'monument-plaque').setOrigin(0.5, 1).setDepth(y)
-      this.add.image(x, y - 38, 'pixel-logo').setOrigin(0.5).setDepth(y + 1)
+      this.add.image(x, y - 45, 'pixel-logo').setOrigin(0.5).setDepth(y + 1)
       this.addObstacle(x, y - 6, 68, 14)
     }
 
@@ -141,9 +163,11 @@ export function createVillageScene(callbacks) {
         this.add.image(x, y, key).setOrigin(0.5, originY).setDepth(y)
       }
 
-      decorationData.bushes.forEach((entry) => addDecor('bush', entry))
+      decorationData.bushes.forEach((entry) => addDecor(`bush-${entry[2] ?? 0}`, entry))
       decorationData.flowers.forEach((entry) => addDecor('flower', entry))
+      decorationData.weeds.forEach((entry) => addDecor('weed', entry))
       decorationData.stones.forEach((entry) => addDecor('stone', entry))
+      decorationData.mushrooms.forEach((entry) => addDecor('mushroom', entry))
       decorationData.benches.forEach((entry) => {
         const sprite = this.add
           .image(tileCenter(entry[0]), tileCenter(entry[1]), 'bench')
@@ -153,6 +177,7 @@ export function createVillageScene(callbacks) {
       })
       decorationData.lamps.forEach((entry) => addDecor('lamp', entry))
       decorationData.mailboxes.forEach((entry) => addDecor('mailbox', entry))
+      decorationData.props.forEach(([key, x, y]) => addDecor(key, [x, y]))
 
       decorationData.fences.forEach(([startX, y, length]) => {
         for (let offset = 0; offset < length; offset += 1) {
@@ -187,15 +212,19 @@ export function createVillageScene(callbacks) {
         })
       })
 
-      this.player = this.physics.add.sprite(PLAYER_SPAWN.x, PLAYER_SPAWN.y, 'player', 0)
+      this.playerBody = this.physics.add.sprite(PLAYER_SPAWN.x, PLAYER_SPAWN.y, 'player', 0)
+      this.playerBody.setOrigin(0.5, 1)
+      this.playerBody.setVisible(false)
+      this.playerBody.setCollideWorldBounds(true)
+      this.playerBody.body.setSize(PLAYER_BODY_SIZE, PLAYER_BODY_SIZE)
+      this.playerBody.body.setOffset(
+        (20 - PLAYER_BODY_SIZE) / 2,
+        28 - PLAYER_BODY_SIZE,
+      )
+      this.player = this.add.sprite(PLAYER_SPAWN.x, PLAYER_SPAWN.y, 'player', 0)
       this.player.setOrigin(0.5, 1)
       this.player.setDepth(Math.round(this.player.y))
-      this.player.setCollideWorldBounds(true)
-      this.player.body.setSize(PLAYER_BODY_SIZE, PLAYER_BODY_SIZE)
-      this.player.body.setOffset(
-        (16 - PLAYER_BODY_SIZE) / 2,
-        24 - PLAYER_BODY_SIZE,
-      )
+      this.cameraAnchor = this.add.zone(PLAYER_SPAWN.x, PLAYER_SPAWN.y, 1, 1)
     }
 
     createInput() {
@@ -214,12 +243,12 @@ export function createVillageScene(callbacks) {
       this.releaseFromWindow = (event) => {
         if (this.heldPointerId === null || event.pointerId === this.heldPointerId) {
           this.heldPointerId = null
-          if (this.player?.body) this.player.body.setVelocity(0, 0)
+          if (this.playerBody?.body) this.playerBody.body.setVelocity(0, 0)
         }
       }
       this.clearInput = () => {
         this.heldPointerId = null
-        if (this.player?.body) this.player.body.setVelocity(0, 0)
+        if (this.playerBody?.body) this.playerBody.body.setVelocity(0, 0)
       }
       window.addEventListener('pointerup', this.releaseFromWindow)
       window.addEventListener('pointercancel', this.releaseFromWindow)
@@ -229,7 +258,7 @@ export function createVillageScene(callbacks) {
     createCamera() {
       const camera = this.cameras.main
       camera.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT)
-      camera.startFollow(this.player, true, 1, 1)
+      camera.startFollow(this.cameraAnchor, true, 1, 1)
       camera.setRoundPixels(true)
       camera.roundPixels = true
       camera.setBackgroundColor(PIXEL_PALETTE.nearBlack)
@@ -246,7 +275,7 @@ export function createVillageScene(callbacks) {
       const pointerId = pointer.event?.pointerId ?? pointer.id
       if (this.heldPointerId !== null && pointerId !== this.heldPointerId) return
       this.heldPointerId = null
-      this.player.body.setVelocity(0, 0)
+      this.playerBody.body.setVelocity(0, 0)
     }
 
     markMoved() {
@@ -269,8 +298,8 @@ export function createVillageScene(callbacks) {
       if (this.heldPointerId === null) return { x: 0, y: 0 }
       const pointer = this.input.activePointer
       const worldPoint = pointer.positionToCamera(this.cameras.main)
-      const x = worldPoint.x - this.player.x
-      const y = worldPoint.y - (this.player.y - 8)
+      const x = worldPoint.x - this.playerBody.x
+      const y = worldPoint.y - (this.playerBody.y - 8)
       if (x * x + y * y < 36) return { x: 0, y: 0 }
       return { x, y }
     }
@@ -285,7 +314,7 @@ export function createVillageScene(callbacks) {
 
       const length = Math.hypot(movement.x, movement.y)
       if (!length) {
-        this.player.body.setVelocity(0, 0)
+        this.playerBody.body.setVelocity(0, 0)
         this.player.anims.stop()
         const idleFrames = { down: 0, left: 4, right: 8, up: 12 }
         this.player.setFrame(idleFrames[this.facing])
@@ -294,7 +323,7 @@ export function createVillageScene(callbacks) {
 
       const velocityX = (movement.x / length) * PLAYER_SPEED
       const velocityY = (movement.y / length) * PLAYER_SPEED
-      this.player.body.setVelocity(velocityX, velocityY)
+      this.playerBody.body.setVelocity(velocityX, velocityY)
 
       if (Math.abs(velocityX) > Math.abs(velocityY)) {
         this.facing = velocityX < 0 ? 'left' : 'right'
@@ -309,10 +338,10 @@ export function createVillageScene(callbacks) {
       let nearestDistance = Infinity
       pois.forEach((poi) => {
         const distance = Phaser.Math.Distance.Between(
-          this.player.x,
-          this.player.y,
-          poi.position[0],
-          poi.position[1],
+          this.playerBody.x,
+          this.playerBody.y,
+          poi.interactionPoint[0],
+          poi.interactionPoint[1],
         )
         if (distance < poi.interactionRadius && distance < nearestDistance) {
           nearest = poi
@@ -329,14 +358,22 @@ export function createVillageScene(callbacks) {
 
     update() {
       this.updateMovement()
-      this.player.setDepth(Math.round(this.player.y))
       this.updatePoi()
+    }
+
+    syncVisual() {
+      const renderX = Math.round(this.playerBody.x)
+      const renderY = Math.round(this.playerBody.y)
+      this.player.setPosition(renderX, renderY)
+      this.player.setDepth(renderY)
+      this.cameraAnchor.setPosition(renderX, renderY)
     }
 
     cleanup() {
       this.input.off('pointerdown', this.handlePointerDown, this)
       this.input.off('pointerup', this.releasePointer, this)
       this.input.off('pointerupoutside', this.releasePointer, this)
+      this.events.off(Phaser.Scenes.Events.POST_UPDATE, this.syncVisual, this)
       window.removeEventListener('pointerup', this.releaseFromWindow)
       window.removeEventListener('pointercancel', this.releaseFromWindow)
       window.removeEventListener('blur', this.clearInput)

@@ -41,6 +41,7 @@ export default function PhaserGame({
       onMove,
       onPoiChange,
       reducedMotion,
+      debug: import.meta.env.DEV && new URLSearchParams(window.location.search).has('debug'),
     })
 
     const game = new Phaser.Game({
