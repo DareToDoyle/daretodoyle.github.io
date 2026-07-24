@@ -25,13 +25,13 @@ export default function GameHUD({ hasMoved, isMobile, ready }) {
 
       <div className={`instructions ${hideInstructions ? 'instructions--hidden' : ''}`}>
         <span>Explore</span>
-        <strong>{isMobile ? 'Tap to move' : 'WASD or click to move'}</strong>
-        <p>Walk towards a place to discover it.</p>
+        <strong>{isMobile ? 'Hold + drag to walk' : 'WASD or hold + drag'}</strong>
+        <p>Release to stop. Follow the paths to discover each place.</p>
       </div>
 
       <div className="control-legend">
-        <span>{isMobile ? 'Tap + hold' : 'W A S D'}</span>
-        <span>Move</span>
+        <span>{isMobile ? 'Hold + steer' : 'W A S D / Hold'}</span>
+        <span>Explore</span>
       </div>
     </div>
   )

@@ -74,7 +74,7 @@ export default function App() {
       <main className={`game-shell ${loadingComplete ? 'game-shell--ready' : ''}`}>
         <Suspense fallback={null}>
           <GameExperience
-            paused={!loadingComplete || Boolean(selectedPoi)}
+            paused={!loadingComplete}
             onInteract={setSelectedPoi}
             onMove={handleMove}
             onReady={handleReady}

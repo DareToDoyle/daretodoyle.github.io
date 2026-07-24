@@ -4,7 +4,7 @@ import * as THREE from 'three'
 import Player from './Player'
 import World from './World'
 import { pois } from '../data/pois'
-import { PLAYER_SPAWN, sceneryColliders, WORLD_BOUNDS } from '../data/worldData'
+import { sceneryColliders, WORLD_BOUNDS } from '../data/worldData'
 
 function ReadySignal({ onReady }) {
   useEffect(() => {
@@ -14,16 +14,18 @@ function ReadySignal({ onReady }) {
 }
 
 function GameScene({ paused, onInteract, onMove, onReady, isMobile, reducedMotion }) {
-  const targetRef = useRef(null)
-  const playerPositionRef = useRef(new THREE.Vector3(...PLAYER_SPAWN))
+  const controllerRef = useRef({
+    active: false,
+    pointerId: null,
+    point: new THREE.Vector3(),
+  })
   const colliders = useMemo(
     () => [
       ...sceneryColliders,
       ...pois.map((poi) => ({
-        type: 'circle',
+        ...poi.collider,
         x: poi.position[0],
         z: poi.position[1],
-        radius: poi.collisionRadius,
       })),
     ],
     [],
@@ -33,17 +35,15 @@ function GameScene({ paused, onInteract, onMove, onReady, isMobile, reducedMotio
     <Suspense fallback={null}>
       <World
         pois={pois}
-        targetRef={targetRef}
+        controllerRef={controllerRef}
         paused={paused}
         onMoveIntent={onMove}
-        reducedMotion={reducedMotion}
       />
       <Player
         pois={pois}
         colliders={colliders}
         bounds={WORLD_BOUNDS}
-        targetRef={targetRef}
-        playerPositionRef={playerPositionRef}
+        controllerRef={controllerRef}
         paused={paused}
         onInteract={onInteract}
         onMove={onMove}
@@ -61,12 +61,12 @@ export default function GameExperience({ paused, onInteract, onMove, onReady, is
       className="game-canvas"
       orthographic
       shadows
-      dpr={isMobile ? 1 : [1, 1.5]}
+      dpr={isMobile ? 1 : [1, 1.35]}
       camera={{
-        position: isMobile ? [11, 13.5, 11] : [8.8, 10.5, 8.8],
-        zoom: isMobile ? 35 : 55,
+        position: isMobile ? [7.6, 8.8, 7.6] : [6.7, 7.4, 6.7],
+        zoom: isMobile ? 70 : 98,
         near: 0.1,
-        far: 80,
+        far: 60,
       }}
       gl={{
         antialias: !isMobile,
@@ -75,8 +75,8 @@ export default function GameExperience({ paused, onInteract, onMove, onReady, is
       }}
       onCreated={({ gl }) => {
         gl.outputColorSpace = THREE.SRGBColorSpace
-        gl.toneMapping = THREE.ACESFilmicToneMapping
-        gl.toneMappingExposure = 1.08
+        gl.toneMapping = THREE.NeutralToneMapping
+        gl.toneMappingExposure = 1
       }}
     >
       <GameScene

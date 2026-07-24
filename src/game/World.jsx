@@ -1,108 +1,207 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useMemo } from 'react'
 import { Edges, RoundedBox, useTexture } from '@react-three/drei'
-import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import PointOfInterest from './PointOfInterest'
-import { benches, lamps, rocks, trees, WORLD_BOUNDS } from '../data/worldData'
+import {
+  benches,
+  bushes,
+  fences,
+  gardenTiles,
+  lamps,
+  rocks,
+  trees,
+} from '../data/worldData'
 
 const palette = {
   ink: '#171716',
-  charcoal: '#292927',
-  dark: '#50504c',
-  mid: '#91918b',
-  path: '#bdbdb7',
-  ground: '#dadad5',
-  light: '#ededE8',
-  white: '#fafaf7',
+  charcoal: '#30302e',
+  dark: '#5d5d58',
+  foliage: '#898983',
+  foliageLight: '#aaa9a2',
+  path: '#ecece6',
+  terrain: '#cfcfc9',
+  terrainDark: '#b8b8b1',
+  white: '#f7f7f2',
 }
 
-function Path({ from, to, width = 1.35 }) {
-  const dx = to[0] - from[0]
-  const dz = to[1] - from[1]
-  const length = Math.sqrt(dx * dx + dz * dz)
-  const angle = Math.atan2(dx, dz)
-
+function ToonBox({ args, color, radius = 0.06, children, ...props }) {
   return (
-    <mesh
-      position={[(from[0] + to[0]) / 2, 0.025, (from[1] + to[1]) / 2]}
-      rotation={[0, angle, 0]}
-      receiveShadow
-    >
-      <boxGeometry args={[width, 0.055, length]} />
-      <meshStandardMaterial color={palette.path} roughness={1} />
-    </mesh>
+    <RoundedBox args={args} radius={radius} smoothness={3} castShadow receiveShadow {...props}>
+      <meshToonMaterial color={color} />
+      {children}
+    </RoundedBox>
   )
 }
 
-function Tree({ position }) {
-  const [x, z, scale] = position
+function Path({ from, to, width = 1.5 }) {
+  const dx = to[0] - from[0]
+  const dz = to[1] - from[1]
+  const length = Math.hypot(dx, dz)
+  const angle = Math.atan2(dx, dz)
+  const tileCount = Math.max(2, Math.floor(length / 0.74))
+
   return (
-    <group position={[x, 0, z]} scale={scale}>
-      <mesh position={[0, 0.72, 0]} castShadow>
-        <cylinderGeometry args={[0.16, 0.22, 1.4, 7]} />
-        <meshStandardMaterial color={palette.charcoal} roughness={0.9} />
+    <group>
+      <ToonBox
+        args={[width, 0.075, length]}
+        color={palette.path}
+        radius={0.18}
+        position={[(from[0] + to[0]) / 2, 0.07, (from[1] + to[1]) / 2]}
+        rotation={[0, angle, 0]}
+      />
+      {Array.from({ length: tileCount - 1 }, (_, index) => {
+        const progress = (index + 1) / tileCount
+        return (
+          <mesh
+            key={progress}
+            position={[
+              THREE.MathUtils.lerp(from[0], to[0], progress),
+              0.113,
+              THREE.MathUtils.lerp(from[1], to[1], progress),
+            ]}
+            rotation={[-Math.PI / 2, 0, angle]}
+          >
+            <planeGeometry args={[width * 0.86, 0.018]} />
+            <meshBasicMaterial color="#bdbdb7" transparent opacity={0.58} />
+          </mesh>
+        )
+      })}
+    </group>
+  )
+}
+
+function Tree({ data }) {
+  const [x, z, scale, rotation] = data
+  return (
+    <group position={[x, 0, z]} scale={scale} rotation={[0, rotation, 0]}>
+      <mesh position={[0, 0.67, 0]} castShadow>
+        <cylinderGeometry args={[0.2, 0.28, 1.25, 12]} />
+        <meshToonMaterial color={palette.charcoal} />
       </mesh>
-      <mesh position={[0, 1.7, 0]} castShadow>
-        <dodecahedronGeometry args={[0.78, 0]} />
-        <meshStandardMaterial color={palette.light} roughness={0.96} flatShading />
-        <Edges color={palette.ink} threshold={16} />
+      <mesh position={[0, 1.62, 0]} scale={[1.08, 0.95, 1]} castShadow>
+        <sphereGeometry args={[0.78, 18, 12]} />
+        <meshToonMaterial color={palette.foliage} />
       </mesh>
-      <mesh position={[-0.36, 1.45, 0.12]} castShadow>
-        <dodecahedronGeometry args={[0.5, 0]} />
-        <meshStandardMaterial color={palette.mid} roughness={0.96} flatShading />
+      <mesh position={[-0.47, 1.48, 0.06]} scale={[0.9, 0.88, 0.9]} castShadow>
+        <sphereGeometry args={[0.55, 16, 10]} />
+        <meshToonMaterial color={palette.foliageLight} />
+      </mesh>
+      <mesh position={[0.44, 1.42, -0.08]} scale={[0.95, 0.86, 0.9]} castShadow>
+        <sphereGeometry args={[0.58, 16, 10]} />
+        <meshToonMaterial color={palette.dark} />
+      </mesh>
+      <mesh position={[0.05, 2.0, -0.04]} scale={[0.78, 0.72, 0.8]} castShadow>
+        <sphereGeometry args={[0.58, 16, 10]} />
+        <meshToonMaterial color={palette.foliageLight} />
       </mesh>
     </group>
   )
 }
 
-function Rock({ position }) {
-  const [x, z, scale] = position
+function Bush({ data }) {
+  const [x, z, scale] = data
   return (
-    <mesh position={[x, scale * 0.48, z]} scale={[scale * 1.2, scale, scale]} rotation={[0.1, x, -0.1]} castShadow>
-      <dodecahedronGeometry args={[0.7, 0]} />
-      <meshStandardMaterial color={palette.dark} roughness={1} flatShading />
-      <Edges color={palette.ink} threshold={20} />
-    </mesh>
-  )
-}
-
-function Bench({ position }) {
-  const [x, z, rotation] = position
-  return (
-    <group position={[x, 0, z]} rotation={[0, rotation, 0]}>
-      <mesh position={[0, 0.42, 0]} castShadow>
-        <boxGeometry args={[1.65, 0.16, 0.48]} />
-        <meshStandardMaterial color={palette.dark} />
-      </mesh>
-      <mesh position={[0, 0.8, -0.2]} rotation={[-0.16, 0, 0]} castShadow>
-        <boxGeometry args={[1.65, 0.62, 0.12]} />
-        <meshStandardMaterial color={palette.light} />
-      </mesh>
-      {[-0.58, 0.58].map((legX) => (
-        <mesh key={legX} position={[legX, 0.2, 0]}>
-          <boxGeometry args={[0.11, 0.42, 0.38]} />
-          <meshStandardMaterial color={palette.ink} />
+    <group position={[x, 0.12, z]} scale={scale}>
+      {[-0.3, 0, 0.3].map((offset, index) => (
+        <mesh key={offset} position={[offset, 0.28 + (index === 1 ? 0.12 : 0), index === 1 ? -0.08 : 0]} castShadow>
+          <sphereGeometry args={[index === 1 ? 0.42 : 0.34, 14, 10]} />
+          <meshToonMaterial color={index === 1 ? palette.foliageLight : palette.foliage} />
         </mesh>
       ))}
     </group>
   )
 }
 
-function Lamp({ position }) {
-  const [x, z] = position
+function Rock({ data }) {
+  const [x, z, scale] = data
+  return (
+    <mesh position={[x, scale * 0.48, z]} scale={[scale * 1.25, scale, scale]} rotation={[0.05, x * 0.2, -0.05]} castShadow>
+      <sphereGeometry args={[0.7, 10, 7]} />
+      <meshToonMaterial color={palette.dark} />
+      <Edges color={palette.ink} threshold={28} />
+    </mesh>
+  )
+}
+
+function Bench({ data }) {
+  const [x, z, rotation] = data
+  return (
+    <group position={[x, 0, z]} rotation={[0, rotation, 0]}>
+      {[-0.45, 0, 0.45].map((offset) => (
+        <mesh key={offset} position={[offset, 0.45, 0]} castShadow>
+          <boxGeometry args={[0.39, 0.15, 0.58]} />
+          <meshToonMaterial color={palette.dark} />
+        </mesh>
+      ))}
+      <mesh position={[0, 0.82, -0.23]} rotation={[-0.13, 0, 0]} castShadow>
+        <boxGeometry args={[1.62, 0.55, 0.13]} />
+        <meshToonMaterial color={palette.foliageLight} />
+      </mesh>
+      {[-0.55, 0.55].map((offset) => (
+        <mesh key={offset} position={[offset, 0.22, 0]}>
+          <boxGeometry args={[0.12, 0.44, 0.42]} />
+          <meshToonMaterial color={palette.ink} />
+        </mesh>
+      ))}
+    </group>
+  )
+}
+
+function Lamp({ data }) {
+  const [x, z] = data
   return (
     <group position={[x, 0, z]}>
-      <mesh position={[0, 0.9, 0]} castShadow>
-        <cylinderGeometry args={[0.045, 0.075, 1.8, 8]} />
-        <meshStandardMaterial color={palette.ink} />
+      <mesh position={[0, 0.8, 0]} castShadow>
+        <cylinderGeometry args={[0.055, 0.09, 1.55, 10]} />
+        <meshToonMaterial color={palette.ink} />
       </mesh>
-      <mesh position={[0, 1.82, 0]} castShadow>
-        <octahedronGeometry args={[0.22, 0]} />
-        <meshStandardMaterial color={palette.white} emissive={palette.white} emissiveIntensity={0.35} />
+      <ToonBox args={[0.38, 0.38, 0.38]} position={[0, 1.57, 0]} color={palette.white} radius={0.09} />
+      <mesh position={[0, 1.57, 0]}>
+        <boxGeometry args={[0.47, 0.07, 0.47]} />
+        <meshToonMaterial color={palette.ink} />
       </mesh>
-      <mesh position={[0, 0.04, 0]}>
-        <cylinderGeometry args={[0.22, 0.29, 0.08, 12]} />
-        <meshStandardMaterial color={palette.ink} />
+      <mesh position={[0, 0.05, 0]}>
+        <cylinderGeometry args={[0.2, 0.25, 0.1, 14]} />
+        <meshToonMaterial color={palette.ink} />
+      </mesh>
+    </group>
+  )
+}
+
+function Fence({ data }) {
+  const horizontal = data.halfX > data.halfZ
+  const length = horizontal ? data.halfX * 2 : data.halfZ * 2
+  const rotation = horizontal ? 0 : Math.PI / 2
+  return (
+    <group position={[data.x, 0, data.z]} rotation={[0, rotation, 0]}>
+      {[-length / 2, 0, length / 2].map((x) => (
+        <mesh key={x} position={[x, 0.42, 0]} castShadow>
+          <boxGeometry args={[0.13, 0.84, 0.13]} />
+          <meshToonMaterial color={palette.ink} />
+        </mesh>
+      ))}
+      {[0.3, 0.6].map((y) => (
+        <mesh key={y} position={[0, y, 0]} castShadow>
+          <boxGeometry args={[length, 0.1, 0.1]} />
+          <meshToonMaterial color={palette.charcoal} />
+        </mesh>
+      ))}
+    </group>
+  )
+}
+
+function GardenTile({ data, index }) {
+  const [x, z] = data
+  return (
+    <group position={[x, 0.09, z]}>
+      <ToonBox args={[0.42, 0.09, 0.42]} color={palette.terrainDark} radius={0.04} />
+      <mesh position={[0, 0.22, 0]} castShadow>
+        <cylinderGeometry args={[0.025, 0.035, 0.3, 8]} />
+        <meshToonMaterial color={palette.ink} />
+      </mesh>
+      <mesh position={[0, 0.39, 0]} rotation={[0, index * 0.8, 0]} castShadow>
+        <sphereGeometry args={[0.11, 8, 6]} />
+        <meshToonMaterial color={index % 2 ? palette.white : palette.foliage} />
       </mesh>
     </group>
   )
@@ -114,87 +213,76 @@ function LogoMonument() {
   texture.anisotropy = 4
 
   return (
-    <group position={[0, 0, -1.35]}>
-      <RoundedBox args={[3.7, 2.35, 0.34]} radius={0.12} smoothness={2} position={[0, 1.65, 0]} castShadow>
-        <meshStandardMaterial color={palette.white} roughness={0.72} />
-        <Edges color={palette.ink} threshold={16} />
+    <group position={[0, 0.15, -1.3]}>
+      <RoundedBox args={[3.55, 2.15, 0.3]} radius={0.13} smoothness={3} position={[0, 1.62, 0]} castShadow>
+        <meshToonMaterial color={palette.white} />
+        <Edges color={palette.ink} threshold={18} />
       </RoundedBox>
-      <mesh position={[0, 1.65, 0.178]}>
-        <planeGeometry args={[3.25, 1.9]} />
+      <mesh position={[0, 1.62, 0.158]}>
+        <planeGeometry args={[3.12, 1.72]} />
         <meshBasicMaterial map={texture} toneMapped={false} />
       </mesh>
-      {[-1.25, 1.25].map((x) => (
-        <mesh key={x} position={[x, 0.48, -0.04]} castShadow>
-          <cylinderGeometry args={[0.11, 0.16, 0.95, 8]} />
-          <meshStandardMaterial color={palette.ink} />
+      {[-1.2, 1.2].map((x) => (
+        <mesh key={x} position={[x, 0.5, -0.04]} castShadow>
+          <cylinderGeometry args={[0.12, 0.18, 0.98, 12]} />
+          <meshToonMaterial color={palette.ink} />
         </mesh>
       ))}
-      <mesh position={[0, 0.08, 0]} receiveShadow>
-        <cylinderGeometry args={[1.2, 1.4, 0.16, 20]} />
-        <meshStandardMaterial color={palette.dark} />
+      <mesh position={[0, 0.07, 0]} receiveShadow>
+        <cylinderGeometry args={[1.28, 1.5, 0.14, 16]} />
+        <meshToonMaterial color={palette.dark} />
       </mesh>
     </group>
   )
 }
 
-function FenceLine({ z }) {
-  const positions = [-7.7, -5.7, -3.7, 3.7, 5.7, 7.7]
+function Island({ geometry }) {
   return (
-    <group>
-      {positions.map((x) => (
-        <mesh key={x} position={[x, 0.35, z]} castShadow>
-          <boxGeometry args={[0.12, 0.7, 0.12]} />
-          <meshStandardMaterial color={palette.ink} />
-        </mesh>
-      ))}
-      <mesh position={[-5.7, 0.35, z]}>
-        <boxGeometry args={[4.05, 0.08, 0.1]} />
-        <meshStandardMaterial color={palette.ink} />
+    <>
+      <mesh geometry={geometry} rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.57, 0]} scale={[1.035, 1.035, 1]} receiveShadow>
+        <meshToonMaterial color={palette.ink} />
       </mesh>
-      <mesh position={[5.7, 0.35, z]}>
-        <boxGeometry args={[4.05, 0.08, 0.1]} />
-        <meshStandardMaterial color={palette.ink} />
+      <mesh geometry={geometry} rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.43, 0]} receiveShadow>
+        <meshToonMaterial color={palette.terrain} />
       </mesh>
-    </group>
+    </>
   )
 }
 
-function TargetMarker({ targetRef, reducedMotion }) {
-  const markerRef = useRef(null)
+export default function World({ pois, controllerRef, paused, onMoveIntent }) {
+  const islandGeometry = useMemo(() => {
+    const shape = new THREE.Shape()
+    shape.moveTo(-6.2, -8.9)
+    shape.bezierCurveTo(-9.2, -8.2, -10.5, -5.5, -10.15, -2.3)
+    shape.bezierCurveTo(-11.0, 0.6, -9.7, 4.7, -8.0, 7.1)
+    shape.bezierCurveTo(-5.6, 9.15, -2.1, 9.35, 0.25, 8.95)
+    shape.bezierCurveTo(3.5, 9.55, 7.5, 8.5, 9.2, 5.8)
+    shape.bezierCurveTo(10.75, 3.0, 10.65, -0.8, 9.8, -3.2)
+    shape.bezierCurveTo(9.6, -6.6, 7.1, -8.5, 4.3, -9.0)
+    shape.bezierCurveTo(0.6, -9.55, -2.8, -9.2, -6.2, -8.9)
+    const geometry = new THREE.ExtrudeGeometry(shape, {
+      depth: 0.42,
+      bevelEnabled: true,
+      bevelSegments: 2,
+      bevelSize: 0.16,
+      bevelThickness: 0.12,
+      curveSegments: 5,
+    })
+    geometry.computeVertexNormals()
+    return geometry
+  }, [])
 
-  useFrame((state) => {
-    const marker = markerRef.current
-    const target = targetRef.current
-    if (!marker) return
-    marker.visible = Boolean(target)
-    if (!target) return
-    marker.position.set(target.x, 0.09, target.z)
-    if (!reducedMotion) {
-      marker.rotation.z = state.clock.elapsedTime * 0.65
-      marker.scale.setScalar(1 + Math.sin(state.clock.elapsedTime * 5) * 0.08)
-    }
-  })
-
-  return (
-    <group ref={markerRef} rotation={[-Math.PI / 2, 0, 0]} visible={false}>
-      <mesh>
-        <ringGeometry args={[0.25, 0.31, 20]} />
-        <meshBasicMaterial color={palette.ink} />
-      </mesh>
-      <mesh>
-        <ringGeometry args={[0.43, 0.455, 20]} />
-        <meshBasicMaterial color={palette.ink} transparent opacity={0.4} />
-      </mesh>
-    </group>
-  )
-}
-
-export default function World({ pois, targetRef, paused, onMoveIntent, reducedMotion }) {
-  const draggingRef = useRef(false)
+  useEffect(() => () => islandGeometry.dispose(), [islandGeometry])
 
   useEffect(() => {
-    const release = () => {
-      draggingRef.current = false
+    const release = (event) => {
+      if (
+        controllerRef.current.pointerId === null ||
+        controllerRef.current.pointerId === event.pointerId
+      ) {
+        controllerRef.current.active = false
+        controllerRef.current.pointerId = null
+      }
     }
     window.addEventListener('pointerup', release)
     window.addEventListener('pointercancel', release)
@@ -202,93 +290,102 @@ export default function World({ pois, targetRef, paused, onMoveIntent, reducedMo
       window.removeEventListener('pointerup', release)
       window.removeEventListener('pointercancel', release)
     }
-  }, [])
+  }, [controllerRef])
 
-  const setTarget = (event) => {
-    if (paused) return
-    const x = THREE.MathUtils.clamp(event.point.x, WORLD_BOUNDS.minX + 0.25, WORLD_BOUNDS.maxX - 0.25)
-    const z = THREE.MathUtils.clamp(event.point.z, WORLD_BOUNDS.minZ + 0.25, WORLD_BOUNDS.maxZ - 0.25)
-    targetRef.current = new THREE.Vector3(x, 0, z)
-    onMoveIntent()
+  const updateControl = (event) => {
+    controllerRef.current.point.set(event.point.x, 0, event.point.z)
   }
 
   const handlePointerDown = (event) => {
+    if (paused || (event.pointerType === 'mouse' && event.button !== 0)) return
     event.stopPropagation()
-    draggingRef.current = true
-    setTarget(event)
+    event.target.setPointerCapture?.(event.pointerId)
+    controllerRef.current.active = true
+    controllerRef.current.pointerId = event.pointerId
+    updateControl(event)
+    onMoveIntent()
   }
 
   const handlePointerMove = (event) => {
-    if (draggingRef.current) setTarget(event)
+    if (!controllerRef.current.active || controllerRef.current.pointerId !== event.pointerId) return
+    event.stopPropagation()
+    updateControl(event)
+  }
+
+  const handlePointerUp = (event) => {
+    if (controllerRef.current.pointerId !== event.pointerId) return
+    event.stopPropagation()
+    controllerRef.current.active = false
+    controllerRef.current.pointerId = null
+    event.target.releasePointerCapture?.(event.pointerId)
   }
 
   return (
     <>
       <color attach="background" args={['#111110']} />
-      <fog attach="fog" args={['#111110', 18, 34]} />
+      <fog attach="fog" args={['#111110', 15, 28]} />
 
-      <ambientLight intensity={1.35} />
+      <hemisphereLight intensity={1.45} color="#ffffff" groundColor="#3c3c38" />
       <directionalLight
-        position={[-8, 14, 6]}
-        intensity={2.8}
+        position={[-8, 13, 7]}
+        intensity={2.15}
         castShadow
         shadow-mapSize={[1024, 1024]}
-        shadow-camera-left={-12}
-        shadow-camera-right={12}
-        shadow-camera-top={12}
-        shadow-camera-bottom={-12}
-        shadow-bias={-0.0004}
+        shadow-camera-left={-10}
+        shadow-camera-right={10}
+        shadow-camera-top={10}
+        shadow-camera-bottom={-10}
+        shadow-bias={-0.0003}
       />
 
-      <RoundedBox
-        args={[19, 0.65, 17.4]}
-        radius={0.5}
-        smoothness={3}
-        position={[0, -0.36, 0]}
-        receiveShadow
-      >
-        <meshStandardMaterial color={palette.ground} roughness={0.94} />
-        <Edges color={palette.ink} threshold={14} />
-      </RoundedBox>
+      <Island geometry={islandGeometry} />
 
       <mesh
-        position={[0, 0.005, 0]}
+        position={[0, 0.18, 0]}
         rotation={[-Math.PI / 2, 0, 0]}
-        receiveShadow
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
       >
-        <planeGeometry args={[18.3, 16.5]} />
-        <meshStandardMaterial color={palette.ground} roughness={1} />
+        <circleGeometry args={[12, 48]} />
+        <meshBasicMaterial transparent opacity={0} depthWrite={false} colorWrite={false} />
       </mesh>
 
-      <Path from={[0, -6.6]} to={[0, 6.5]} width={1.35} />
-      <Path from={[-7.2, 0]} to={[7.2, 0]} width={1.35} />
-      <Path from={[-5.6, -4.45]} to={[5.55, 4.15]} width={1.05} />
-      <Path from={[5.55, -4.45]} to={[-5.55, 4.15]} width={1.05} />
+      <Path from={[0, -7.8]} to={[0, 7.9]} width={1.55} />
+      <Path from={[-7.45, 0]} to={[7.45, 0]} width={1.55} />
+      <Path from={[-6.0, -4.2]} to={[0, 0]} width={1.25} />
+      <Path from={[5.9, -3.9]} to={[0, 0]} width={1.25} />
+      <Path from={[5.5, 4.0]} to={[0, 0]} width={1.25} />
+      <Path from={[-5.4, 4.2]} to={[0, 0]} width={1.25} />
 
-      <mesh position={[0, 0.055, 0]} receiveShadow>
-        <cylinderGeometry args={[2.7, 2.7, 0.11, 40]} />
-        <meshStandardMaterial color={palette.light} roughness={0.96} />
+      {[
+        [-6, -4.2, 4.4, 3.8],
+        [5.9, -3.9, 4.4, 3.8],
+        [5.5, 4, 4.4, 3.8],
+        [-5.4, 4.2, 4.4, 3.8],
+        [0, 7, 5.0, 3.5],
+      ].map(([x, z, width, depth]) => (
+        <ToonBox key={`${x}-${z}`} args={[width, 0.08, depth]} position={[x, 0.045, z]} color={palette.terrainDark} radius={0.35} />
+      ))}
+
+      <mesh position={[0, 0.12, 0]} receiveShadow>
+        <cylinderGeometry args={[3.0, 3.15, 0.2, 16]} />
+        <meshToonMaterial color={palette.path} />
       </mesh>
-      <mesh position={[0, 0.116, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <ringGeometry args={[2.22, 2.28, 48]} />
+      <mesh position={[0, 0.225, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[2.48, 2.54, 32]} />
         <meshBasicMaterial color={palette.ink} />
       </mesh>
-
       <LogoMonument />
 
-      {pois.map((poi) => (
-        <PointOfInterest key={poi.id} poi={poi} reducedMotion={reducedMotion} />
-      ))}
-      {trees.map((position) => <Tree key={`${position[0]}-${position[1]}`} position={position} />)}
-      {rocks.map((position) => <Rock key={`${position[0]}-${position[1]}`} position={position} />)}
-      {benches.map((position) => <Bench key={`${position[0]}-${position[1]}`} position={position} />)}
-      {lamps.map((position) => <Lamp key={`${position[0]}-${position[1]}`} position={position} />)}
-
-      <FenceLine z={-7.35} />
-      <FenceLine z={7.35} />
-      <TargetMarker targetRef={targetRef} reducedMotion={reducedMotion} />
+      {pois.map((poi) => <PointOfInterest key={poi.id} poi={poi} />)}
+      {trees.map((data) => <Tree key={`${data[0]}-${data[1]}`} data={data} />)}
+      {bushes.map((data) => <Bush key={`${data[0]}-${data[1]}`} data={data} />)}
+      {rocks.map((data) => <Rock key={`${data[0]}-${data[1]}`} data={data} />)}
+      {benches.map((data) => <Bench key={`${data[0]}-${data[1]}`} data={data} />)}
+      {lamps.map((data) => <Lamp key={`${data[0]}-${data[1]}`} data={data} />)}
+      {fences.map((data) => <Fence key={`${data.x}-${data.z}`} data={data} />)}
+      {gardenTiles.map((data, index) => <GardenTile key={`${data[0]}-${data[1]}`} data={data} index={index} />)}
     </>
   )
 }
