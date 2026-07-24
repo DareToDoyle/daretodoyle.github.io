@@ -205,12 +205,10 @@ a:focus-visible {
 }
 
 .world-label {
-  display: flex;
+  position: relative;
+  display: block;
   padding: 0.36rem 0.52rem 0.32rem;
   border: 1px solid rgba(244, 244, 239, 0.7);
-  flex-direction: column;
-  align-items: center;
-  gap: 0.3rem;
   color: var(--paper);
   background: rgba(17, 17, 16, 0.9);
   filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.75));
@@ -218,14 +216,6 @@ a:focus-visible {
   letter-spacing: 0.12em;
   text-transform: uppercase;
   user-select: none;
-}
-
-.world-label i {
-  position: absolute;
-  bottom: -0.82rem;
-  width: 1px;
-  height: 0.8rem;
-  background: currentColor;
 }
 
 /* Loading */

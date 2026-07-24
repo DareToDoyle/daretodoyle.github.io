@@ -179,14 +179,10 @@ export default function PointOfInterest({ poi, reducedMotion }) {
       <Html
         center
         position={[0, poi.type === 'lab' ? 2.72 : 2.82, 0]}
-        distanceFactor={10}
         className="world-label-wrap"
         style={{ pointerEvents: 'none' }}
       >
-        <div className="world-label">
-          <span>{poi.label}</span>
-          <i />
-        </div>
+        <div className="world-label">{poi.label}</div>
       </Html>
     </group>
   )
