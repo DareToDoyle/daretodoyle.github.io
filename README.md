@@ -1,19 +1,37 @@
-# Dare to Doyle
+# Dare to Doyle — Interactive 3D World
 
-An experimental personal project hub for **DARE TO DOYLE** — part lab, part social landing page, and part creative playground.
+**Dare to Doyle** is a fully static, playable personal website built as a compact monochrome 3D diorama. Visitors move an original low-poly character around the map and discover social links and projects as in-world destinations.
 
-The site is a fully static React/Vite build. GSAP and Lenis drive the page motion, while React Three Fiber renders one lightweight procedural object in the intro. There is no backend, database, paid API, or external 3D model.
+The world replaces conventional navigation and scrolling sections. It has no backend, database, paid service, external model, or runtime content dependency.
+
+## Features
+
+- Full-viewport React Three Fiber world
+- Original procedural low-poly player with idle and walking motion
+- WASD and arrow-key movement
+- Click, tap, and click-and-hold movement
+- Smooth isometric follow camera
+- Lightweight radius and bounding-box collisions
+- Data-driven external and internal points of interest
+- RPG-style destination dialogue
+- Internal D2D Lab project panel
+- Responsive mobile camera and touch controls
+- Monochrome loading experience using the original `logo.png`
+- Reduced-motion treatment
+- Keyboard and screen-reader direct-link fallback
+- WebGL fallback page
+- GitHub Pages deployment workflow
 
 ## Local development
 
-Node.js 20.19+ or 22.12+ is recommended.
+Node.js 20.19+ or Node.js 22.12+ is recommended.
 
 ```bash
 npm install
 npm run dev
 ```
 
-Vite prints the local development URL in the terminal, usually `http://localhost:5173`.
+Vite will print the local URL, normally `http://localhost:5173`.
 
 ## Production build
 
@@ -22,30 +40,62 @@ npm run build
 npm run preview
 ```
 
-The static production site is generated in `dist/`.
+The static production output is written to `dist/`.
 
-## Editing content
+## Controls
 
-- Project entries, social links, and playground labels: `src/data/siteData.js`
-- Main page composition: `src/App.jsx`
-- Intro, lab, social, playground, and end scenes: `src/sections/`
-- Procedural 3D object: `src/three/CoreScene.jsx`
-- Colours, typography, layout, and responsive rules: `src/styles/global.css`
-- Page title and metadata: `index.html`
+Desktop:
 
-The `projects` and `socials` arrays are deliberately separate from the components so new entries can be added without restructuring the presentation.
+- `WASD` or arrow keys to walk
+- Click on the ground to walk to a location
+- Click and hold while moving the pointer to continuously update the destination
+- `Escape` closes an open interaction
 
-## GitHub Pages deployment
+Mobile:
 
-The workflow at `.github/workflows/deploy.yml` builds and deploys the site whenever `main` is pushed.
+- Tap the ground to walk
+- Tap and hold, then drag, for continuous movement
 
-1. Push the repository to GitHub.
-2. Open **Settings → Pages** in the repository.
-3. Under **Build and deployment**, set **Source** to **GitHub Actions**.
-4. Push to `main` or run the workflow manually from the **Actions** tab.
+Walking into a destination’s proximity area opens its interaction automatically.
 
-Vite uses relative asset paths (`base: './'`), so the build works on both an account-level Pages site and a repository subpath. The existing root `CNAME` is copied into the build for the custom domain.
+## Editing destinations
 
-## Motion and accessibility
+All points of interest are defined in [`src/data/pois.js`](src/data/pois.js). Each entry contains:
 
-The layout adapts to desktop and mobile. Expensive 3D detail is reduced on smaller screens, the custom cursor only appears for fine pointers, and `prefers-reduced-motion` disables smooth scrolling and non-essential motion.
+- display label and copy;
+- URL or internal interaction mode;
+- world position;
+- structure type;
+- interaction and collision radiuses.
+
+Adding a destination does not require changing player movement or dialogue logic.
+
+World decoration and collision data are in [`src/data/worldData.js`](src/data/worldData.js).
+
+## Project structure
+
+```text
+src/
+  components/      Loading, HUD, dialogue, and fallback UI
+  data/            POI and world configuration
+  game/            World, player, POI structures, and collisions
+  styles/          Active global game styling
+  App.jsx
+  main.jsx
+public/
+  logo.png         Original Dare to Doyle logo
+```
+
+The previous scrolling site is retained only for reference in `_archive/previous-site/`. It is outside `src/` and is not bundled.
+
+## GitHub Pages
+
+The workflow in `.github/workflows/deploy.yml` installs dependencies, builds the Vite app, copies the root `CNAME` into `dist/`, and deploys the artifact.
+
+In GitHub:
+
+1. Open **Settings → Pages**.
+2. Set **Source** to **GitHub Actions**.
+3. Push to `main`, or manually run **Deploy Vite site to GitHub Pages** from the Actions tab.
+
+Vite uses relative production asset paths, so the build works on account-level Pages domains and repository subpaths. The custom domain remains configured through the preserved root `CNAME`.

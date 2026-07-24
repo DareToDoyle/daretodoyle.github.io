@@ -1,53 +1,101 @@
-import { useEffect } from 'react'
-import Lenis from 'lenis'
-import gsap from 'gsap'
-import { ScrollTrigger } from 'gsap/ScrollTrigger'
-import CustomCursor from './components/CustomCursor'
-import ProgressRail from './components/ProgressRail'
-import Intro from './sections/Intro'
-import Lab from './sections/Lab'
-import SocialSpace from './sections/SocialSpace'
-import Playground from './sections/Playground'
-import EndExperience from './sections/EndExperience'
+import { Component, lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react'
+import LoadingScreen from './components/LoadingScreen'
+import InteractionDialog from './components/InteractionDialog'
+import GameHUD from './components/GameHUD'
+import FallbackPage from './components/FallbackPage'
+import { externalPois } from './data/pois'
 
-gsap.registerPlugin(ScrollTrigger)
+const GameExperience = lazy(() => import('./game/GameExperience'))
+
+function canUseWebGL() {
+  try {
+    const canvas = document.createElement('canvas')
+    return Boolean(
+      canvas.getContext('webgl2', { failIfMajorPerformanceCaveat: false }) ||
+      canvas.getContext('webgl', { failIfMajorPerformanceCaveat: false }),
+    )
+  } catch {
+    return false
+  }
+}
+
+class WebGLErrorBoundary extends Component {
+  constructor(props) {
+    super(props)
+    this.state = { failed: false }
+  }
+
+  static getDerivedStateFromError() {
+    return { failed: true }
+  }
+
+  render() {
+    if (this.state.failed) return <FallbackPage />
+    return this.props.children
+  }
+}
 
 export default function App() {
+  const [selectedPoi, setSelectedPoi] = useState(null)
+  const [worldReady, setWorldReady] = useState(false)
+  const [loadingComplete, setLoadingComplete] = useState(false)
+  const [hasMoved, setHasMoved] = useState(false)
+  const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 720px), (pointer: coarse)').matches)
+  const [reducedMotion, setReducedMotion] = useState(() => window.matchMedia('(prefers-reduced-motion: reduce)').matches)
+  const webglAvailable = useMemo(canUseWebGL, [])
+
   useEffect(() => {
-    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    if (reducedMotion) return undefined
-
-    const lenis = new Lenis({
-      duration: 1.05,
-      smoothWheel: true,
-      wheelMultiplier: 0.9,
-    })
-
-    const update = (time) => lenis.raf(time * 1000)
-    lenis.on('scroll', ScrollTrigger.update)
-    gsap.ticker.add(update)
-    gsap.ticker.lagSmoothing(0)
-
+    const mobileQuery = window.matchMedia('(max-width: 720px), (pointer: coarse)')
+    const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)')
+    const updateMobile = (event) => setIsMobile(event.matches)
+    const updateMotion = (event) => setReducedMotion(event.matches)
+    mobileQuery.addEventListener('change', updateMobile)
+    motionQuery.addEventListener('change', updateMotion)
     return () => {
-      gsap.ticker.remove(update)
-      lenis.destroy()
+      mobileQuery.removeEventListener('change', updateMobile)
+      motionQuery.removeEventListener('change', updateMotion)
     }
   }, [])
 
+  useEffect(() => {
+    if (!worldReady) return undefined
+    const timer = window.setTimeout(() => setLoadingComplete(true), reducedMotion ? 100 : 900)
+    return () => window.clearTimeout(timer)
+  }, [worldReady, reducedMotion])
+
+  const handleReady = useCallback(() => setWorldReady(true), [])
+  const handleMove = useCallback(() => setHasMoved(true), [])
+  const closeDialog = useCallback(() => setSelectedPoi(null), [])
+
+  if (!webglAvailable) return <FallbackPage />
+
   return (
-    <>
-      <a className="skip-link" href="#lab">
-        Skip intro
-      </a>
-      <CustomCursor />
-      <ProgressRail />
-      <main>
-        <Intro />
-        <Lab />
-        <SocialSpace />
-        <Playground />
-        <EndExperience />
+    <WebGLErrorBoundary>
+      <main className={`game-shell ${loadingComplete ? 'game-shell--ready' : ''}`}>
+        <Suspense fallback={null}>
+          <GameExperience
+            paused={!loadingComplete || Boolean(selectedPoi)}
+            onInteract={setSelectedPoi}
+            onMove={handleMove}
+            onReady={handleReady}
+            isMobile={isMobile}
+            reducedMotion={reducedMotion}
+          />
+        </Suspense>
+
+        <GameHUD hasMoved={hasMoved} isMobile={isMobile} ready={loadingComplete} />
+        <InteractionDialog poi={selectedPoi} onClose={closeDialog} reducedMotion={reducedMotion} />
+        {!loadingComplete && <LoadingScreen reducedMotion={reducedMotion} />}
+
+        <nav className="accessible-links" aria-label="Direct destination links">
+          <span>Direct links</span>
+          {externalPois.map((poi) => (
+            <a key={poi.id} href={poi.url} target="_blank" rel="noreferrer">
+              {poi.label}: {poi.handle}
+            </a>
+          ))}
+        </nav>
       </main>
-    </>
+    </WebGLErrorBoundary>
   )
 }
