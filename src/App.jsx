@@ -5,21 +5,18 @@ import GameHUD from './components/GameHUD'
 import FallbackPage from './components/FallbackPage'
 import { externalPois } from './data/pois'
 
-const GameExperience = lazy(() => import('./game/GameExperience'))
+const PhaserGame = lazy(() => import('./game/PhaserGame'))
 
-function canUseWebGL() {
+function canUseCanvas() {
   try {
     const canvas = document.createElement('canvas')
-    return Boolean(
-      canvas.getContext('webgl2', { failIfMajorPerformanceCaveat: false }) ||
-      canvas.getContext('webgl', { failIfMajorPerformanceCaveat: false }),
-    )
+    return Boolean(canvas.getContext('2d'))
   } catch {
     return false
   }
 }
 
-class WebGLErrorBoundary extends Component {
+class GameErrorBoundary extends Component {
   constructor(props) {
     super(props)
     this.state = { failed: false }
@@ -42,7 +39,7 @@ export default function App() {
   const [hasMoved, setHasMoved] = useState(false)
   const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 720px), (pointer: coarse)').matches)
   const [reducedMotion, setReducedMotion] = useState(() => window.matchMedia('(prefers-reduced-motion: reduce)').matches)
-  const webglAvailable = useMemo(canUseWebGL, [])
+  const canvasAvailable = useMemo(canUseCanvas, [])
 
   useEffect(() => {
     const mobileQuery = window.matchMedia('(max-width: 720px), (pointer: coarse)')
@@ -67,18 +64,16 @@ export default function App() {
   const handleMove = useCallback(() => setHasMoved(true), [])
   const closeDialog = useCallback(() => setSelectedPoi(null), [])
 
-  if (!webglAvailable) return <FallbackPage />
+  if (!canvasAvailable) return <FallbackPage />
 
   return (
-    <WebGLErrorBoundary>
+    <GameErrorBoundary>
       <main className={`game-shell ${loadingComplete ? 'game-shell--ready' : ''}`}>
         <Suspense fallback={null}>
-          <GameExperience
-            paused={!loadingComplete}
-            onInteract={setSelectedPoi}
+          <PhaserGame
+            onPoiChange={setSelectedPoi}
             onMove={handleMove}
             onReady={handleReady}
-            isMobile={isMobile}
             reducedMotion={reducedMotion}
           />
         </Suspense>
@@ -96,6 +91,6 @@ export default function App() {
           ))}
         </nav>
       </main>
-    </WebGLErrorBoundary>
+    </GameErrorBoundary>
   )
 }

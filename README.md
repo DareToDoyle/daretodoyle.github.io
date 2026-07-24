@@ -1,24 +1,27 @@
-# Dare to Doyle — Interactive 3D World
+# Dare to Doyle — Pixel Village
 
-**Dare to Doyle** is a fully static personal website presented as a small monochrome game world. Visitors guide an original character through a toy-like village to find social destinations and the D2D Lab.
+**Dare to Doyle** is a fully static personal website presented as a small monochrome pixel-art RPG village. Visitors guide an original character through the map to discover social destinations and the internal D2D Lab.
 
-The experience has no backend, database, paid service, external model, or runtime content dependency.
+The experience has no backend, database, paid service, external tileset, external model, or runtime content service.
 
 ## Features
 
-- React, Vite, React Three Fiber, Three.js, Drei, and GSAP
-- Original procedural character with idle and speed-linked walking animation
-- Keyboard and held-pointer analogue movement
-- Touch-and-hold mobile steering
-- Swept circle collision with wall sliding and an irregular island boundary
-- Smooth close-follow isometric camera
+- Phaser Canvas game inside a lightweight React shell
+- 112×80 handcrafted tile map with broad paths and an irregular forest boundary
+- Original monochrome tiles, props, buildings, trees, and sprite sheet generated in-repository
+- Four-direction idle and walking frames
+- WASD and arrow-key movement
+- Held mouse or touch movement with live drag steering and immediate release
+- Phaser Arcade Physics for forest, building, fence, monument, and large-rock collision
+- Pixel-rounded follow camera and integer CSS scaling
+- Y-depth sorting for the player, buildings, trees, and scenery
 - Data-driven external and internal points of interest
-- Physical in-world destination signs generated without external assets
-- Compact, non-blocking proximity dialogue that dismisses when the player leaves
-- Monochrome toon-style village, trees, paths, gardens, props, and central plaza
-- Original `logo.png` used at the plaza and D2D Lab
-- Responsive framing and reduced-motion support
-- Keyboard/screen-reader direct links and a WebGL fallback
+- Non-blocking proximity dialogue that dismisses when the player leaves
+- Internal D2D Lab project list
+- Existing `logo.png` converted into a pixel-style central plaza monument at runtime
+- Responsive portrait and landscape layouts
+- Reduced-motion support
+- Keyboard/screen-reader direct links and a Canvas fallback
 - GitHub Pages deployment with custom-domain support
 
 ## Local development
@@ -46,13 +49,13 @@ The static production output is written to `dist/`.
 Desktop:
 
 - Use `WASD` or the arrow keys to walk.
-- Press and hold the left mouse button on the world to move.
+- Press and hold the left mouse button to move relative to the pointer.
 - Drag while holding to steer.
 - Release to stop immediately.
 
 Mobile:
 
-- Touch and hold the world to move.
+- Touch and hold to move.
 - Slide the held finger to steer.
 - Lift the finger to stop immediately.
 
@@ -62,28 +65,35 @@ Walking within range of a destination shows its contextual panel. Movement remai
 
 Points of interest live in [`src/data/pois.js`](src/data/pois.js). Each entry defines its:
 
-- label, copy, handle, and URL;
-- world position and structure type;
-- interaction radius and collider;
-- external or internal interaction mode.
+- ID, name, copy, handle, and URL;
+- building and interaction positions;
+- interaction radius and type;
+- external or internal behavior.
 
-World decoration and matching collision data live in [`src/data/worldData.js`](src/data/worldData.js).
+The village dimensions, ground tiles, routes, forest boundary, scenery, collision objects, and player spawn live in [`src/data/villageData.js`](src/data/villageData.js).
+
+Procedural pixel tiles, sprite frames, buildings, props, and the logo conversion are defined in [`src/game/pixelAssets.js`](src/game/pixelAssets.js).
 
 ## Project structure
 
 ```text
 src/
-  components/      Loading, HUD, contextual dialogue, and fallback UI
-  data/            POI and world configuration
-  game/            World, player, destinations, input, and collision
-  styles/          Active global game styling
+  components/      Loading, HUD, dialogue, and fallback UI
+  data/            POI and tile-world configuration
+  game/            Phaser setup, village scene, and pixel asset generation
+  styles/          Active pixel-game interface styling
   App.jsx
   main.jsx
 public/
   logo.png         Original Dare to Doyle logo
 ```
 
-The older scrolling site remains under `_archive/previous-site/` for reference and is not included in production.
+Previous implementations are retained outside the active source tree:
+
+- `_archive/3d-version/` — useful source from the former React Three Fiber world
+- `_archive/previous-site/` — the earlier scrolling website
+
+Neither archive is bundled into production.
 
 ## GitHub Pages
 

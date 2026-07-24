@@ -7,7 +7,7 @@ export default function FallbackPage() {
       <p>DARE TO DOYLE</p>
       <h1>A tiny world,<br />currently out of range.</h1>
       <p className="fallback__note">
-        This browser could not start WebGL. The important destinations are still open.
+        This browser could not start the pixel village. The important destinations are still open.
       </p>
       <nav aria-label="Dare to Doyle links">
         {externalPois.map((poi) => (
