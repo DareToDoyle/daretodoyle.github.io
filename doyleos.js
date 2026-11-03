@@ -11,12 +11,15 @@
   const password = $('#password');
   const signingText = $('#signingText');
   const progressBar = $('.progress i');
+  const progressTrack = $('.progress');
+  const loginButton = $('.login-button');
   const iconGrid = $('#iconGrid');
   const windowArea = $('#windowArea');
   const taskButtons = $('#taskButtons');
   const startItems = $('#startItems');
   const startButton = $('#startButton');
   const startMenu = $('#startMenu');
+  const cookieConsent = $('#cookieConsent');
   const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
   const timeoutIds = new Set();
   let animationFrame = 0;
@@ -26,7 +29,108 @@
   const ICON_CELL_WIDTH = 140;
   const ICON_CELL_HEIGHT = 102;
   const ICON_STORAGE_KEY = 'doyleos-icon-grid-v1';
-  const iconSlots = new Map(CONFIG.apps.map((app, index) => [app.id, { col: 0, row: index }]));
+  const ANALYTICS_CONSENT_KEY = 'doyleos-analytics-consent-v1';
+  const SETTINGS_STORAGE_KEY = 'doyleos-settings-v1';
+  const SETTINGS_DEFAULTS = Object.freeze({ wallpaper: 'd2d', darkMode: false, crt: true, pixel: true, cursor: 'classic' });
+  const MEDIA_PLAYER_APP = Object.freeze({
+    id: 'media-player',
+    label: CONFIG.mediaPlayer?.appName || 'Doyle Media Player',
+    icon: 'media'
+  });
+  const DESKTOP_APPS = CONFIG.mediaPlayer?.enabled === true ? [...CONFIG.apps, MEDIA_PLAYER_APP] : [...CONFIG.apps];
+  const iconSlots = new Map(DESKTOP_APPS.map((app, index) => [app.id, { col: 0, row: index }]));
+  let analyticsLoaded = false;
+  let spotifyIframeApiPromise = null;
+
+  function readSystemSettings() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(SETTINGS_STORAGE_KEY));
+      return {
+        wallpaper: ['d2d', 'hills', 'midnight'].includes(saved?.wallpaper) ? saved.wallpaper : SETTINGS_DEFAULTS.wallpaper,
+        darkMode: typeof saved?.darkMode === 'boolean' ? saved.darkMode : SETTINGS_DEFAULTS.darkMode,
+        crt: typeof saved?.crt === 'boolean' ? saved.crt : SETTINGS_DEFAULTS.crt,
+        pixel: typeof saved?.pixel === 'boolean' ? saved.pixel : SETTINGS_DEFAULTS.pixel,
+        cursor: ['classic', 'crosshair', 'hand'].includes(saved?.cursor) ? saved.cursor : SETTINGS_DEFAULTS.cursor,
+      };
+    } catch { return { ...SETTINGS_DEFAULTS }; }
+  }
+
+  let systemSettings = readSystemSettings();
+
+  function applySystemSettings(persist = true) {
+    const root = document.documentElement;
+    root.classList.remove('wallpaper-d2d', 'wallpaper-hills', 'wallpaper-midnight', 'theme-light', 'theme-dark', 'effects-crt', 'effects-pixel', 'cursor-classic', 'cursor-crosshair', 'cursor-hand');
+    root.classList.add(`wallpaper-${systemSettings.wallpaper}`);
+    root.classList.add(systemSettings.darkMode ? 'theme-dark' : 'theme-light');
+    root.classList.toggle('effects-crt', systemSettings.crt);
+    root.classList.toggle('effects-pixel', systemSettings.pixel);
+    root.classList.add(`cursor-${systemSettings.cursor}`);
+    if (persist) {
+      try { localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(systemSettings)); } catch { /* Preferences remain active for this page. */ }
+    }
+  }
+
+  applySystemSettings(false);
+
+  window.dataLayer = window.dataLayer || [];
+  function gtag() { window.dataLayer.push(arguments); }
+  window.gtag = gtag;
+  gtag('consent', 'default', {
+    ad_storage: 'denied',
+    ad_user_data: 'denied',
+    ad_personalization: 'denied',
+    analytics_storage: 'denied',
+  });
+
+  function readAnalyticsConsent() {
+    try { return localStorage.getItem(ANALYTICS_CONSENT_KEY); } catch { return null; }
+  }
+
+  function loadAnalytics() {
+    if (analyticsLoaded || !/^G-[A-Z0-9]+$/.test(CONFIG.analytics.measurementId)) return;
+    analyticsLoaded = true;
+    gtag('consent', 'update', {
+      ad_storage: 'denied',
+      ad_user_data: 'denied',
+      ad_personalization: 'denied',
+      analytics_storage: 'granted',
+    });
+    gtag('js', new Date());
+    gtag('config', CONFIG.analytics.measurementId, {
+      allow_google_signals: false,
+      allow_ad_personalization_signals: false,
+    });
+    const script = document.createElement('script');
+    script.async = true;
+    script.src = `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(CONFIG.analytics.measurementId)}`;
+    script.dataset.doyleosAnalytics = 'true';
+    document.head.append(script);
+  }
+
+  function showAnalyticsChoices() {
+    closeStartMenu();
+    cookieConsent.hidden = false;
+    $('#allowAnalyticsButton').focus();
+  }
+
+  function hideAnalyticsChoices() { cookieConsent.hidden = true; }
+
+  function setAnalyticsConsent(choice) {
+    try { localStorage.setItem(ANALYTICS_CONSENT_KEY, choice); } catch { /* Choice remains active for this page. */ }
+    if (choice === 'granted') {
+      loadAnalytics();
+      hideAnalyticsChoices();
+      return;
+    }
+    gtag('consent', 'update', {
+      ad_storage: 'denied',
+      ad_user_data: 'denied',
+      ad_personalization: 'denied',
+      analytics_storage: 'denied',
+    });
+    hideAnalyticsChoices();
+    if (analyticsLoaded) location.reload();
+  }
 
   const iconMarkup = type => `<span class="retro-icon icon-${type}" aria-hidden="true"><i></i><b></b></span>`;
   function later(callback, delay) {
@@ -44,31 +148,53 @@
   }
   function typeValue(input, value, delay, run, done) {
     let position = 0;
+    const rhythm = [1, .78, 1.16, .9, 1.28, .84];
+    document.querySelectorAll('#loginForm input').forEach(field => field.classList.remove('is-typing'));
+    input.classList.add('is-typing');
+    input.focus({ preventScroll: true });
     const typeNext = () => {
       if (run !== introRun) return;
       input.value = value.slice(0, ++position);
-      if (position < value.length) later(typeNext, delay);
-      else later(done, 110);
+      if (position < value.length) {
+        later(typeNext, Math.round(delay * rhythm[(position - 1) % rhythm.length]));
+      } else {
+        input.classList.remove('is-typing');
+        done();
+      }
     };
     typeNext();
   }
+  function pressSignIn(run, done) {
+    if (run !== introRun || transitioning) return;
+    signingText.textContent = 'Signing in…';
+    loginButton.classList.add('is-pressed');
+    loginButton.setAttribute('aria-pressed', 'true');
+    later(() => {
+      if (run !== introRun) return;
+      loginButton.classList.remove('is-pressed');
+      loginButton.setAttribute('aria-pressed', 'false');
+      done();
+    }, CONFIG.login.buttonPressDurationMs);
+  }
   function startIntro() {
     clearTimers();
+    document.documentElement.classList.add('doyleos-booting');
+    loginScreen.setAttribute('aria-busy', 'true');
+    loginScreen.classList.remove('reduced-loading');
     const run = introRun;
     username.value = '';
     password.value = '';
+    loginButton.classList.remove('is-pressed');
+    loginButton.setAttribute('aria-pressed', 'false');
+    document.querySelectorAll('#loginForm input').forEach(field => field.classList.remove('is-typing'));
     progressBar.style.width = '0%';
+    progressTrack.setAttribute('aria-valuenow', '0');
     signingText.textContent = 'Preparing login…';
-    if (reduceMotion.matches) {
-      username.value = CONFIG.login.userName;
-      password.value = CONFIG.login.simulatedPassword;
-      signingText.textContent = 'Loading desktop…';
-      progressBar.style.width = '100%';
-      later(() => showDesktop(run), 180);
-      return;
-    }
     later(() => typeValue(username, CONFIG.login.userName, CONFIG.login.keyDelayMs, run, () => {
-      typeValue(password, CONFIG.login.simulatedPassword, CONFIG.login.passwordDelayMs, run, () => loadDesktop(run));
+      later(() => typeValue(password, CONFIG.login.simulatedPassword, CONFIG.login.passwordDelayMs, run, () => {
+        password.blur();
+        later(() => pressSignIn(run, () => loadDesktop(run)), CONFIG.login.beforeLoadingDelayMs);
+      }), CONFIG.login.betweenFieldsDelayMs);
     }), CONFIG.login.startDelayMs);
   }
   function loadDesktop(run = introRun) {
@@ -77,23 +203,35 @@
     timeoutIds.forEach(clearTimeout);
     timeoutIds.clear();
     signingText.textContent = 'Opening DoyleOS…';
-    const started = performance.now();
     const duration = Math.max(250, CONFIG.login.loadingDurationMs);
-    const step = now => {
+    const blockCount = reduceMotion.matches ? 4 : 14;
+    const stepDuration = duration / blockCount;
+    let completedBlocks = 0;
+    const advanceProgress = () => {
       if (run !== introRun) return;
-      const amount = Math.min(1, (now - started) / duration);
-      progressBar.style.width = `${Math.round(amount * 100)}%`;
-      if (amount < 1) animationFrame = requestAnimationFrame(step);
-      else later(() => showDesktop(run), 100);
+      completedBlocks += 1;
+      const completedPercent = Math.round((completedBlocks / blockCount) * 100);
+      progressBar.style.width = `${completedPercent}%`;
+      progressTrack.setAttribute('aria-valuenow', String(completedPercent));
+      if (completedBlocks < blockCount) {
+        later(advanceProgress, stepDuration);
+        return;
+      }
+      signingText.textContent = 'DoyleOS ready.';
+      later(() => showDesktop(run), 280);
     };
-    animationFrame = requestAnimationFrame(step);
+    later(advanceProgress, stepDuration);
   }
   function showDesktop(run = introRun) {
     if (run !== introRun && !loginScreen.hidden) return;
     clearTimers();
+    document.querySelectorAll('#loginForm input').forEach(field => field.classList.remove('is-typing'));
     loginScreen.hidden = true;
+    loginScreen.removeAttribute('aria-busy');
     desktop.hidden = false;
+    document.documentElement.classList.remove('doyleos-booting');
     layoutDesktopIcons();
+    if (readAnalyticsConsent() === null) showAnalyticsChoices();
   }
   function replayIntro() {
     closeStartMenu();
@@ -109,7 +247,385 @@
       return parsed.protocol === 'https:' || parsed.protocol === 'mailto:' ? parsed.href : null;
     } catch { return null; }
   }
+  function escapeHtml(value) {
+    return String(value).replace(/[&<>'"]/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[character]);
+  }
+
+  function spotifyTrackId(url) {
+    if (typeof url !== 'string' || !url.trim()) return null;
+    try {
+      const parsed = new URL(url);
+      const match = parsed.hostname === 'open.spotify.com' && parsed.pathname.match(/^\/track\/([A-Za-z0-9]{22})\/?$/);
+      return match ? match[1] : null;
+    } catch { return null; }
+  }
+
+  function validArtwork(url) {
+    if (typeof url !== 'string' || !url.trim()) return null;
+    try {
+      const parsed = new URL(url, location.href);
+      return parsed.protocol === 'https:' || parsed.origin === location.origin ? parsed.href : null;
+    } catch { return null; }
+  }
+
+  function mediaSongs() {
+    const librarySongs = Array.isArray(CONFIG.mediaPlayer?.songs) ? CONFIG.mediaPlayer.songs : [];
+    const usedIds = new Set();
+    return librarySongs.map((song, index) => {
+      const requestedId = typeof song?.id === 'string' && song.id.trim() ? song.id.trim() : `song-${index + 1}`;
+      let id = requestedId;
+      let suffix = 2;
+      while (usedIds.has(id)) id = `${requestedId}-${suffix++}`;
+      usedIds.add(id);
+      return {
+        id,
+        title: typeof song?.title === 'string' && song.title.trim() ? song.title.trim() : `Untitled track ${index + 1}`,
+        artist: typeof song?.artist === 'string' && song.artist.trim() ? song.artist.trim() : 'Unknown artist',
+        spotifyUrl: typeof song?.spotifyUrl === 'string' ? song.spotifyUrl.trim() : '',
+        artwork: typeof song?.artwork === 'string' ? song.artwork.trim() : '',
+        year: song?.year ? String(song.year) : '',
+        note: typeof song?.note === 'string' ? song.note.trim() : ''
+      };
+    });
+  }
+
+  function mediaArtwork(song, compact = false) {
+    const artwork = validArtwork(song?.artwork);
+    const label = song ? `${song.title} artwork` : 'Music artwork';
+    return artwork
+      ? `<img src="${escapeHtml(artwork)}" alt="${escapeHtml(label)}" loading="lazy">`
+      : `<span class="media-artwork-fallback${compact ? ' compact' : ''}" aria-hidden="true">&#9835;</span>`;
+  }
+
+  function loadSpotifyIframeApi() {
+    if (spotifyIframeApiPromise) return spotifyIframeApiPromise;
+    spotifyIframeApiPromise = new Promise((resolve, reject) => {
+      window.onSpotifyIframeApiReady = api => resolve(api);
+      const existing = document.querySelector('script[data-spotify-iframe-api]');
+      if (existing) return;
+      const script = document.createElement('script');
+      script.src = 'https://open.spotify.com/embed/iframe-api/v1';
+      script.async = true;
+      script.dataset.spotifyIframeApi = 'true';
+      script.addEventListener('error', () => {
+        spotifyIframeApiPromise = null;
+        reject(new Error('Spotify player API could not be loaded.'));
+      }, { once: true });
+      document.body.append(script);
+    });
+    return spotifyIframeApiPromise;
+  }
+
+  function mediaPlayerBody() {
+    const songs = mediaSongs();
+    const library = songs.length
+      ? songs.map(song => {
+        const playable = Boolean(spotifyTrackId(song.spotifyUrl));
+        return `<button type="button" class="media-library-track" data-media-track="${escapeHtml(song.id)}"${playable ? '' : ' disabled'} aria-label="${escapeHtml(playable ? `Play ${song.title} by ${song.artist}` : `${song.title} is unavailable`)}">
+          <span class="media-track-thumb">${mediaArtwork(song, true)}</span>
+          <span class="media-track-copy"><strong>${escapeHtml(song.title)}</strong><span>${escapeHtml(song.artist)}</span></span>
+          <span class="media-track-state">${playable ? '&#9654;' : 'Link needed'}</span>
+        </button>`;
+      }).join('')
+      : `<div class="media-empty-library">No favourite songs yet. Add tracks in <code>config.js</code>.</div>`;
+    const equaliserBars = Array.from({ length: 18 }, (_, index) => `<i style="--bar:${index}"></i>`).join('');
+    const waveDots = Array.from({ length: 24 }, (_, index) => `<i style="--dot:${index}"></i>`).join('');
+    return `<div class="media-player" data-media-player>
+      <div class="media-menubar" aria-hidden="true"><span>File</span><span>View</span><span>Play</span><span>Help</span></div>
+      <div class="media-player-layout">
+        <section class="media-now-playing" aria-labelledby="mediaNowPlayingTitle">
+          <div class="media-status"><span class="media-status-light"></span><span data-media-status>Starting player...</span></div>
+          <div class="media-feature">
+            <div class="media-record-stage">
+              <div class="media-record">
+                <div class="media-record-label" data-media-artwork>${mediaArtwork(null)}</div>
+                <i class="media-record-spindle" aria-hidden="true"></i>
+              </div>
+              <i class="media-tonearm" aria-hidden="true"></i>
+            </div>
+            <div class="media-track-details">
+              <span class="media-kicker" id="mediaNowPlayingTitle">NOW PLAYING</span>
+              <h2 data-media-title>Select a song</h2>
+              <p class="media-artist" data-media-artist>My favourite songs</p>
+              <p class="media-year" data-media-year hidden></p>
+              <p class="media-note" data-media-note hidden></p>
+            </div>
+          </div>
+          <div class="media-visualiser" aria-label="Decorative retro visualisation">
+            <div class="media-equaliser" aria-hidden="true">${equaliserBars}</div>
+            <div class="media-wave" aria-hidden="true">${waveDots}</div>
+            <span>PLAYBACK VISUALISER</span>
+          </div>
+          <div class="media-transport" aria-label="Music controls">
+            <button class="media-skip-button" type="button" data-media-previous aria-label="Previous favourite song">&#9198;</button>
+            <button class="media-play-button" type="button" data-media-toggle disabled><span data-media-play-icon>&#9654;</span><span data-media-play-label>Starting...</span></button>
+            <button class="media-skip-button" type="button" data-media-next aria-label="Next favourite song">&#9197;</button>
+          </div>
+          <div class="media-embed" data-media-embed><div class="media-embed-message">Connecting to Spotify...</div></div>
+          <div class="media-actions">
+            <a class="win-button media-open-spotify" data-media-open target="_blank" rel="noopener noreferrer" hidden>Open in Spotify</a>
+            <span class="media-unavailable" data-media-unavailable>Spotify link unavailable</span>
+          </div>
+          <p class="media-third-party">The visualiser and record follow Spotify's reported play/pause state. Spotify may independently use cookies or process device data under its own privacy policy.</p>
+        </section>
+        <aside class="media-library" aria-labelledby="mediaLibraryTitle">
+          <div class="media-library-heading"><span id="mediaLibraryTitle">MY FAVOURITE SONGS</span><small>${songs.length} songs</small></div>
+          <div class="media-library-list">${library}</div>
+        </aside>
+      </div>
+    </div>`;
+  }
+
+  function bindMediaPlayer(win) {
+    const songs = mediaSongs();
+    const playableSongs = songs.filter(song => spotifyTrackId(song.spotifyUrl));
+    const root = win.querySelector('[data-media-player]');
+    if (!root) return;
+    let selectedId = '';
+    let controller = null;
+    let destroyed = false;
+    const wantsAutoplay = CONFIG.mediaPlayer?.autoplay === true;
+    const embed = root.querySelector('[data-media-embed]');
+    const status = root.querySelector('[data-media-status]');
+    const playButton = root.querySelector('[data-media-toggle]');
+    const playIcon = root.querySelector('[data-media-play-icon]');
+    const playLabel = root.querySelector('[data-media-play-label]');
+
+    const showPlaybackState = (playing, buffering = false) => {
+      root.classList.toggle('is-playing', playing);
+      root.classList.toggle('is-buffering', buffering);
+      playIcon.innerHTML = playing ? '&#10074;&#10074;' : '&#9654;';
+      playLabel.textContent = playing ? 'Pause' : 'Play';
+      status.textContent = buffering ? 'Buffering...' : (playing ? 'Now playing' : 'Ready - press Play');
+    };
+
+    const selectSong = (song, playAfterLoad = true) => {
+      if (!song) return;
+      const trackId = spotifyTrackId(song.spotifyUrl);
+      root.querySelector('[data-media-title]').textContent = song.title;
+      root.querySelector('[data-media-artist]').textContent = song.artist;
+      const year = root.querySelector('[data-media-year]');
+      year.textContent = song.year;
+      year.hidden = !song.year;
+      const note = root.querySelector('[data-media-note]');
+      note.textContent = song.note;
+      note.hidden = !song.note;
+      root.querySelector('[data-media-artwork]').innerHTML = mediaArtwork(song);
+      root.querySelectorAll('[data-media-track]').forEach(button => button.classList.toggle('selected', button.dataset.mediaTrack === song.id));
+      const openLink = root.querySelector('[data-media-open]');
+      const unavailable = root.querySelector('[data-media-unavailable]');
+      if (!trackId) {
+        if (!controller) embed.innerHTML = '<div class="media-embed-message">This song needs a valid Spotify track URL in <code>config.js</code>.</div>';
+        openLink.hidden = true;
+        unavailable.hidden = false;
+        status.textContent = 'Track unavailable';
+        playButton.disabled = true;
+        root.classList.remove('is-playing', 'is-buffering');
+        selectedId = song.id;
+        return;
+      }
+      openLink.href = `https://open.spotify.com/track/${trackId}`;
+      openLink.hidden = false;
+      unavailable.hidden = true;
+      root.classList.remove('is-playing', 'is-buffering');
+      status.textContent = controller ? 'Loading song...' : 'Connecting to Spotify...';
+      if (controller) {
+        if (selectedId !== song.id) controller.loadEntity(song.spotifyUrl);
+        if (playAfterLoad) controller.play();
+      }
+      selectedId = song.id;
+    };
+
+    root.querySelectorAll('[data-media-track]').forEach(button => button.addEventListener('click', () => {
+      selectSong(songs.find(song => song.id === button.dataset.mediaTrack), true);
+    }));
+    const moveTrack = direction => {
+      if (!playableSongs.length) return;
+      const currentIndex = Math.max(0, playableSongs.findIndex(song => song.id === selectedId));
+      selectSong(playableSongs[(currentIndex + direction + playableSongs.length) % playableSongs.length], true);
+    };
+    root.querySelector('[data-media-previous]').addEventListener('click', () => moveTrack(-1));
+    root.querySelector('[data-media-next]').addEventListener('click', () => moveTrack(1));
+    root.querySelectorAll('.media-skip-button').forEach(button => { button.disabled = playableSongs.length < 2; });
+    playButton.addEventListener('click', () => {
+      if (!controller) return;
+      status.textContent = 'Changing playback...';
+      controller.togglePlay();
+    });
+
+    const favourite = playableSongs.find(song => song.id === CONFIG.mediaPlayer?.defaultTrackId) || playableSongs[0] || songs[0];
+    selectSong(favourite, false);
+
+    if (favourite && spotifyTrackId(favourite.spotifyUrl)) {
+      loadSpotifyIframeApi().then(api => {
+        if (destroyed || !win.isConnected) return;
+        api.createController(embed, { width: '100%', height: 152, url: favourite.spotifyUrl }, spotifyController => {
+          if (destroyed || !win.isConnected) { spotifyController.destroy(); return; }
+          controller = spotifyController;
+          playButton.disabled = false;
+          spotifyController.addListener('ready', () => {
+            if (destroyed) return;
+            status.textContent = wantsAutoplay ? 'Starting music...' : 'Ready - press Play';
+            if (wantsAutoplay) spotifyController.play();
+          });
+          spotifyController.addListener('playback_started', () => {
+            if (!destroyed) showPlaybackState(true, false);
+          });
+          spotifyController.addListener('playback_update', event => {
+            if (destroyed) return;
+            showPlaybackState(!event.data.isPaused && !event.data.isBuffering, event.data.isBuffering);
+          });
+        });
+      }).catch(() => {
+        if (destroyed) return;
+        status.textContent = 'Spotify player unavailable';
+        embed.innerHTML = '<div class="media-embed-message">Spotify could not be reached. Use Open in Spotify to listen.</div>';
+        playButton.disabled = true;
+      });
+    }
+
+    win._doyleMediaCleanup = () => {
+      destroyed = true;
+      root.classList.remove('is-playing', 'is-buffering');
+      if (controller) controller.destroy();
+      controller = null;
+    };
+  }
+
+  function systemSpecsRows() {
+    const platform = navigator.userAgentData?.platform || navigator.platform || 'Not exposed';
+    const memory = navigator.deviceMemory ? `${navigator.deviceMemory} GB approximate` : 'Not exposed';
+    const rows = [
+      ['Operating system', `${CONFIG.brand.name} v${CONFIG.brand.version}`],
+      ['Platform', platform],
+      ['Screen', `${screen.width} × ${screen.height} pixels`],
+      ['Viewport', `${innerWidth} × ${innerHeight} pixels`],
+      ['Pixel ratio', `${devicePixelRatio}×`],
+      ['Colour depth', `${screen.colorDepth}-bit`],
+      ['CPU threads', navigator.hardwareConcurrency || 'Not exposed'],
+      ['Device memory', memory],
+      ['Language', navigator.language || 'Not exposed'],
+      ['Connection', navigator.onLine ? 'Online' : 'Offline'],
+    ];
+    return rows.map(([label, value]) => `<tr><th>${escapeHtml(label)}</th><td>${escapeHtml(value)}</td></tr>`).join('');
+  }
+
+  function settingsBody() {
+    const checked = condition => condition ? ' checked' : '';
+    return `<div class="settings-app">
+      <div class="settings-tabs" role="tablist" aria-label="Settings categories">
+        <button type="button" class="active" role="tab" aria-selected="true" data-settings-tab="display">Display</button>
+        <button type="button" role="tab" aria-selected="false" data-settings-tab="appearance">Appearance</button>
+        <button type="button" role="tab" aria-selected="false" data-settings-tab="effects">Effects</button>
+        <button type="button" role="tab" aria-selected="false" data-settings-tab="mouse">Mouse</button>
+        <button type="button" role="tab" aria-selected="false" data-settings-tab="system">System</button>
+      </div>
+
+      <section class="settings-panel active" role="tabpanel" data-settings-panel="display">
+        <h2>Display Properties</h2>
+        <p>Choose a desktop wallpaper. These backgrounds are original DoyleOS themes.</p>
+        <div class="wallpaper-options">
+          <label><input type="radio" name="wallpaper" value="d2d"${checked(systemSettings.wallpaper === 'd2d')}><span class="wallpaper-preview wallpaper-preview--d2d"><i></i></span><strong>D2D Teal</strong></label>
+          <label><input type="radio" name="wallpaper" value="hills"${checked(systemSettings.wallpaper === 'hills')}><span class="wallpaper-preview wallpaper-preview--hills"></span><strong>Green Hills</strong></label>
+          <label><input type="radio" name="wallpaper" value="midnight"${checked(systemSettings.wallpaper === 'midnight')}><span class="wallpaper-preview wallpaper-preview--midnight"></span><strong>Midnight Grid</strong></label>
+        </div>
+      </section>
+
+      <section class="settings-panel" role="tabpanel" data-settings-panel="appearance" hidden>
+        <h2>Appearance</h2>
+        <label class="settings-check"><input type="checkbox" name="darkMode"${checked(systemSettings.darkMode)}><span><strong>Dark mode</strong><small>Use a darker colour scheme for windows, menus, and controls.</small></span></label>
+      </section>
+
+      <section class="settings-panel" role="tabpanel" data-settings-panel="effects" hidden>
+        <h2>Effects</h2>
+        <label class="settings-check"><input type="checkbox" name="crt"${checked(systemSettings.crt)}><span><strong>CRT scanlines and icon wobble</strong><small>Add moving scanlines and a subtle old-monitor drift to desktop icons.</small></span></label>
+        <label class="settings-check"><input type="checkbox" name="pixel"${checked(systemSettings.pixel)}><span><strong>Pixel effects</strong><small>Use bitmap-style type, hard rendering, and desktop dithering.</small></span></label>
+      </section>
+
+      <section class="settings-panel" role="tabpanel" data-settings-panel="mouse" hidden>
+        <h2>Mouse</h2>
+        <div class="cursor-options">
+          <label><input type="radio" name="cursor" value="classic"${checked(systemSettings.cursor === 'classic')}><span class="cursor-sample">↖</span><strong>Classic arrow</strong></label>
+          <label><input type="radio" name="cursor" value="crosshair"${checked(systemSettings.cursor === 'crosshair')}><span class="cursor-sample">＋</span><strong>Pixel crosshair</strong></label>
+          <label><input type="radio" name="cursor" value="hand"${checked(systemSettings.cursor === 'hand')}><span class="cursor-sample">☝</span><strong>Retro hand</strong></label>
+        </div>
+      </section>
+
+      <section class="settings-panel" role="tabpanel" data-settings-panel="system" hidden>
+        <h2>System</h2>
+        <div class="system-about">${iconMarkup('computer')}<div><strong>${escapeHtml(CONFIG.brand.name)}</strong><span>${escapeHtml(CONFIG.brand.subtitle)} · Version ${escapeHtml(CONFIG.brand.version)}</span></div></div>
+        <table class="system-specs"><tbody>${systemSpecsRows()}</tbody></table>
+        <h3>Credits</h3>
+        <p>Concept, branding, and direction by DareToDoyle. DoyleOS is an original HTML, CSS, and JavaScript experience inspired by late-1990s personal computers. D2D logo supplied by DareToDoyle.</p>
+        <p class="system-local-note">Specs are calculated locally in your browser and are not sent by the Settings app.</p>
+      </section>
+
+      <div class="settings-footer"><button type="button" class="win-button" data-reset-settings>Restore defaults</button><span>Changes are saved automatically.</span></div>
+    </div>`;
+  }
+
+  function bindSettingsControls(win) {
+    const tabs = [...win.querySelectorAll('[data-settings-tab]')];
+    const panels = [...win.querySelectorAll('[data-settings-panel]')];
+    tabs.forEach(tab => tab.addEventListener('click', () => {
+      tabs.forEach(item => { item.classList.toggle('active', item === tab); item.setAttribute('aria-selected', String(item === tab)); });
+      panels.forEach(panel => { const active = panel.dataset.settingsPanel === tab.dataset.settingsTab; panel.classList.toggle('active', active); panel.hidden = !active; });
+    }));
+    win.querySelector('.settings-app').addEventListener('change', event => {
+      const field = event.target;
+      if (field.name === 'wallpaper') systemSettings.wallpaper = field.value;
+      if (field.name === 'darkMode') systemSettings.darkMode = field.checked;
+      if (field.name === 'crt') systemSettings.crt = field.checked;
+      if (field.name === 'pixel') systemSettings.pixel = field.checked;
+      if (field.name === 'cursor') systemSettings.cursor = field.value;
+      applySystemSettings();
+    });
+    win.querySelector('[data-reset-settings]').addEventListener('click', () => {
+      systemSettings = { ...SETTINGS_DEFAULTS };
+      applySystemSettings();
+      closeWindow(win);
+      openApp('settings');
+    });
+  }
+
+  function privacyBody() {
+    const legal = CONFIG.legal;
+    return `<div class="legal-notice">
+      <h2>Privacy &amp; Cookies</h2>
+      <p class="legal-updated">Last updated: ${legal.lastUpdated}</p>
+      <p>This notice explains how ${legal.operatorName} handles information on this website. It does not cover external sites opened from desktop links.</p>
+
+      <h3>What DoyleOS collects</h3>
+      <p>DoyleOS does not provide accounts, accept real login credentials, or submit the animated username and password anywhere. The sign-in screen is a visual effect only. There are no contact forms or hidden profile fields in this site.</p>
+
+      <h3>Local preferences</h3>
+      <p>The desktop stores icon positions, display preferences, effects, cursor choice, and your analytics choice in your browser's local storage so they can be restored on the same device. These preferences stay in your browser and are not used by ${legal.operatorName} to identify you. You can remove them by clearing this site's browser data.</p>
+
+      <h3>Google Analytics</h3>
+      <p>With your permission, this site uses Google Analytics 4 to understand visits and improve the experience. The Google Analytics tag is blocked until you choose <strong>Allow analytics</strong>.</p>
+      <p>When enabled, Google Analytics may process information such as page views, approximate location derived from IP address, browser and device details, session information, and interactions with the site. Google Analytics uses first-party identifiers such as the <code>_ga</code> cookie to distinguish visits and sessions.</p>
+      <p>Advertising storage, Google Signals, and ad-personalisation features are disabled in this implementation.</p>
+
+      <h3>Spotify embedded content</h3>
+      <p>Doyle Media Player uses Spotify's official embedded player. The Spotify frame is only added after you deliberately open the Media Player app. Spotify may independently set cookies or process information such as your IP address, browser, device, and playback interactions under Spotify's own privacy policy. DoyleOS does not receive or store your listening history, selected song, playback state, or Spotify account details.</p>
+
+      <h3>Consent and your choices</h3>
+      <p>You can allow analytics, continue with essential storage only, or change your choice at any time. Choosing essential only blocks the Google tag completely. You can also clear this site's cookies and local storage through your browser.</p>
+      <button class="win-button privacy-settings-button" type="button" data-action="analytics-settings">Change analytics choice</button>
+      <div class="legal-links">
+        <a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer">Google Privacy Policy</a>
+        <a href="https://support.google.com/analytics/answer/11593727" target="_blank" rel="noopener noreferrer">Google Analytics data collection</a>
+        <a href="https://www.spotify.com/legal/privacy-policy/" target="_blank" rel="noopener noreferrer">Spotify Privacy Policy</a>
+      </div>
+
+      <h3>Changes to this notice</h3>
+      <p>This notice may be updated when the site's features, advertising setup, or legal requirements change. The date above shows the latest revision.</p>
+    </div>`;
+  }
   function appBody(app) {
+    if (app.id === 'privacy') return privacyBody();
+    if (app.id === 'settings') return settingsBody();
+    if (app.id === 'media-player') return mediaPlayerBody();
     const destination = validDestination(app.url);
     const cta = destination
       ? `<a class="win-button open-link" href="${destination}" target="_blank" rel="noopener noreferrer">↗ &nbsp; ${app.cta}</a>`
@@ -122,7 +638,19 @@
   function aboutOsApp() {
     return { id: 'about-os', label: 'About DoyleOS', icon: 'computer', heading: 'DoyleOS 98', description: 'A playful personal link hub by DareToDoyle, inspired by late-1990s desktop interfaces. DoyleOS is an original website and is not affiliated with or endorsed by Microsoft.', cta: 'Website', url: null };
   }
-  function getApp(id) { return id === 'about-os' ? aboutOsApp() : CONFIG.apps.find(app => app.id === id); }
+  function privacyApp() {
+    return { id: 'privacy', label: 'Privacy & Cookies', icon: 'document' };
+  }
+  function settingsApp() {
+    return { id: 'settings', label: 'Settings', icon: 'settings' };
+  }
+  function getApp(id) {
+    if (id === 'about-os') return aboutOsApp();
+    if (id === 'privacy') return privacyApp();
+    if (id === 'settings') return settingsApp();
+    if (id === 'media-player' && CONFIG.mediaPlayer?.enabled === true) return MEDIA_PLAYER_APP;
+    return CONFIG.apps.find(app => app.id === id);
+  }
   function focusWindow(win) {
     if (!win?.isConnected) return;
     document.querySelectorAll('.app-window').forEach(item => item.classList.add('inactive'));
@@ -132,9 +660,9 @@
     document.querySelectorAll('.task-button').forEach(item => item.classList.remove('active'));
     document.querySelector(`[data-task="${win.dataset.window}"]`)?.classList.add('active');
   }
-  function initialPosition(index) {
+  function initialPosition(index, preferredWidth = 650) {
     const availableWidth = windowArea.clientWidth;
-    const width = Math.min(650, Math.max(390, availableWidth - 210));
+    const width = Math.min(preferredWidth, Math.max(390, availableWidth - 210));
     const leftBase = Math.max(175, Math.round((availableWidth - width) / 2));
     return { left: Math.min(leftBase + (index % 4) * 24, Math.max(0, availableWidth - width)), top: 38 + (index % 5) * 25, width };
   }
@@ -144,7 +672,7 @@
     closeStartMenu();
     let win = document.querySelector(`[data-window="${id}"]`);
     if (win) { focusWindow(win); return; }
-    const position = initialPosition(document.querySelectorAll('.app-window').length);
+    const position = initialPosition(document.querySelectorAll('.app-window').length, id === 'media-player' ? 920 : 650);
     win = document.createElement('section');
     win.className = 'app-window';
     win.dataset.window = id;
@@ -164,11 +692,18 @@
     win.querySelector('[data-action="close"]').addEventListener('click', () => closeWindow(win));
     win.querySelector('[data-action="min"]').addEventListener('click', () => minimiseWindow(win));
     win.querySelector('[data-action="max"]').addEventListener('click', () => toggleMaximise(win));
+    win.querySelector('[data-action="analytics-settings"]')?.addEventListener('click', showAnalyticsChoices);
+    if (id === 'settings') bindSettingsControls(win);
+    if (id === 'media-player') bindMediaPlayer(win);
     makeDraggable(win);
     focusWindow(win);
   }
   function closeWindow(win) {
     if (!win?.dataset) return;
+    if (win.dataset.window === 'media-player') {
+      win._doyleMediaCleanup?.();
+      win.querySelectorAll('iframe').forEach(frame => { frame.src = 'about:blank'; frame.remove(); });
+    }
     document.querySelector(`[data-task="${win.dataset.window}"]`)?.remove();
     win.remove();
     const remaining = [...document.querySelectorAll('.app-window:not([hidden])')];
@@ -217,6 +752,8 @@
   }
   function closeStartMenu() {
     startMenu.hidden = true;
+    startMenu.querySelector('[data-programs-menu]')?.setAttribute('hidden', '');
+    startMenu.querySelector('[data-programs-toggle]')?.setAttribute('aria-expanded', 'false');
     startButton.classList.remove('active');
     startButton.setAttribute('aria-expanded', 'false');
   }
@@ -231,7 +768,7 @@
   function restoreIconSlots() {
     try {
       const saved = JSON.parse(localStorage.getItem(ICON_STORAGE_KEY));
-      CONFIG.apps.forEach(app => {
+      DESKTOP_APPS.forEach(app => {
         const slot = saved?.[app.id];
         if (Number.isInteger(slot?.col) && slot.col >= 0 && Number.isInteger(slot?.row) && slot.row >= 0) {
           iconSlots.set(app.id, { col: slot.col, row: slot.row });
@@ -251,7 +788,7 @@
     const maxCol = Math.max(0, Math.floor((iconGrid.clientWidth - 130) / ICON_CELL_WIDTH));
     const maxRow = Math.max(0, Math.floor((iconGrid.clientHeight - 92) / ICON_CELL_HEIGHT));
     const claimed = new Set();
-    CONFIG.apps.forEach(app => {
+    DESKTOP_APPS.forEach(app => {
       const requested = iconSlots.get(app.id) || { col: 0, row: 0 };
       let col = Math.min(requested.col, maxCol);
       let row = Math.min(requested.row, maxRow);
@@ -317,7 +854,7 @@
   function buildDesktop() {
     startButton.setAttribute('aria-expanded', 'false');
     restoreIconSlots();
-    CONFIG.apps.forEach(app => {
+    DESKTOP_APPS.forEach(app => {
       const icon = document.createElement('button');
       icon.type = 'button';
       icon.className = 'desktop-icon';
@@ -331,40 +868,80 @@
       });
       enableIconDragging(icon, app.id);
       iconGrid.append(icon);
-      const item = document.createElement('button');
-      item.type = 'button';
-      item.innerHTML = `${iconMarkup(app.icon)}<span>${app.label}</span>`;
-      item.addEventListener('click', () => openApp(app.id));
-      startItems.append(item);
     });
+    if (CONFIG.mediaPlayer?.enabled === true) {
+      const programs = document.createElement('div');
+      programs.className = 'start-programs';
+      programs.innerHTML = `<button type="button" data-programs-toggle aria-expanded="false">${iconMarkup('folder')}<span>Programs</span><b aria-hidden="true">&#9654;</b></button><div class="programs-menu" data-programs-menu hidden><button type="button" data-program-app="media-player">${iconMarkup('media')}<span>${escapeHtml(MEDIA_PLAYER_APP.label)}</span></button></div>`;
+      const programsToggle = programs.querySelector('[data-programs-toggle]');
+      const programsMenu = programs.querySelector('[data-programs-menu]');
+      programsToggle.addEventListener('click', () => {
+        const opening = programsMenu.hidden;
+        programsMenu.hidden = !opening;
+        programsToggle.setAttribute('aria-expanded', String(opening));
+        if (opening) programsMenu.querySelector('button')?.focus();
+      });
+      programs.querySelector('[data-program-app="media-player"]').addEventListener('click', () => openApp('media-player'));
+      startItems.append(programs);
+    }
     const about = document.createElement('button');
     about.type = 'button';
     about.className = 'menu-separator';
     about.innerHTML = `${iconMarkup('computer')}<span>About DoyleOS</span>`;
     about.addEventListener('click', () => openApp('about-os'));
     startItems.append(about);
+    const settings = document.createElement('button');
+    settings.type = 'button';
+    settings.innerHTML = `${iconMarkup('settings')}<span>Settings</span>`;
+    settings.addEventListener('click', () => openApp('settings'));
+    startItems.append(settings);
+    const privacy = document.createElement('button');
+    privacy.type = 'button';
+    privacy.innerHTML = `${iconMarkup('document')}<span>Privacy &amp; Cookies</span>`;
+    privacy.addEventListener('click', () => openApp('privacy'));
+    startItems.append(privacy);
   }
   function updateClock() {
     $('#clock').textContent = new Intl.DateTimeFormat([], { hour: 'numeric', minute: '2-digit' }).format(new Date());
   }
 
-  loginForm.addEventListener('submit', event => { event.preventDefault(); loadDesktop(); });
+  loginForm.addEventListener('submit', event => {
+    event.preventDefault();
+    pressSignIn(introRun, () => loadDesktop(introRun));
+  });
   $('#skipButton').addEventListener('click', () => showDesktop(introRun));
   startButton.addEventListener('click', event => { event.stopPropagation(); toggleStartMenu(); });
   document.addEventListener('pointerdown', event => { if (!event.target.closest('.start-menu, .start-button')) closeStartMenu(); });
   document.addEventListener('keydown', event => {
+    if ((event.ctrlKey || event.metaKey) && ['+', '=', '-', '_', '0'].includes(event.key)) {
+      event.preventDefault();
+      return;
+    }
     if (event.key !== 'Escape') return;
+    if (!cookieConsent.hidden) { setAnalyticsConsent('denied'); return; }
     if (!startMenu.hidden) { closeStartMenu(); startButton.focus(); return; }
     const active = [...document.querySelectorAll('.app-window:not([hidden])')].sort((a, b) => Number(a.style.zIndex) - Number(b.style.zIndex)).pop();
     if (active) closeWindow(active);
   });
   $('#logoutButton').textContent = '🔄 Restart DoyleOS';
   $('#logoutButton').addEventListener('click', replayIntro);
+  $('#allowAnalyticsButton').addEventListener('click', () => setAnalyticsConsent('granted'));
+  $('#declineAnalyticsButton').addEventListener('click', () => setAnalyticsConsent('denied'));
+  $('#privacyDetailsButton').addEventListener('click', () => {
+    hideAnalyticsChoices();
+    openApp('privacy');
+  });
   addEventListener('resize', () => {
     document.querySelectorAll('.app-window').forEach(clampWindow);
     layoutDesktopIcons();
   });
   addEventListener('pagehide', clearTimers);
+  document.addEventListener('wheel', event => {
+    if (event.ctrlKey) event.preventDefault();
+  }, { passive: false });
+  document.addEventListener('gesturestart', event => event.preventDefault(), { passive: false });
+  document.addEventListener('gesturechange', event => event.preventDefault(), { passive: false });
+  if (readAnalyticsConsent() === 'granted') loadAnalytics();
   buildDesktop();
   layoutDesktopIcons();
   updateClock();
