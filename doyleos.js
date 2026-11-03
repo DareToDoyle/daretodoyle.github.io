@@ -23,6 +23,10 @@
   let introRun = 0;
   let transitioning = false;
   let zIndex = 5;
+  const ICON_CELL_WIDTH = 140;
+  const ICON_CELL_HEIGHT = 102;
+  const ICON_STORAGE_KEY = 'doyleos-icon-grid-v1';
+  const iconSlots = new Map(CONFIG.apps.map((app, index) => [app.id, { col: 0, row: index }]));
 
   const iconMarkup = type => `<span class="retro-icon icon-${type}" aria-hidden="true"><i></i><b></b></span>`;
   function later(callback, delay) {
@@ -89,6 +93,7 @@
     clearTimers();
     loginScreen.hidden = true;
     desktop.hidden = false;
+    layoutDesktopIcons();
   }
   function replayIntro() {
     closeStartMenu();
@@ -115,7 +120,7 @@
     return `${main}<div class="app-divider"></div>${cta}`;
   }
   function aboutOsApp() {
-    return { id: 'about-os', label: 'About DoyleOS', icon: 'computer', heading: 'DoyleOS 98', description: 'A playful personal link hub by Dare to Doyle, inspired by late-1990s desktop interfaces. DoyleOS is an original website and is not affiliated with or endorsed by Microsoft.', cta: 'Website', url: null };
+    return { id: 'about-os', label: 'About DoyleOS', icon: 'computer', heading: 'DoyleOS 98', description: 'A playful personal link hub by DareToDoyle, inspired by late-1990s desktop interfaces. DoyleOS is an original website and is not affiliated with or endorsed by Microsoft.', cta: 'Website', url: null };
   }
   function getApp(id) { return id === 'about-os' ? aboutOsApp() : CONFIG.apps.find(app => app.id === id); }
   function focusWindow(win) {
@@ -222,8 +227,96 @@
     startButton.setAttribute('aria-expanded', String(opening));
     if (opening) startMenu.querySelector('button')?.focus();
   }
+
+  function restoreIconSlots() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(ICON_STORAGE_KEY));
+      CONFIG.apps.forEach(app => {
+        const slot = saved?.[app.id];
+        if (Number.isInteger(slot?.col) && slot.col >= 0 && Number.isInteger(slot?.row) && slot.row >= 0) {
+          iconSlots.set(app.id, { col: slot.col, row: slot.row });
+        }
+      });
+    } catch {
+      // Storage may be unavailable; the default grid remains fully functional.
+    }
+  }
+
+  function saveIconSlots() {
+    try { localStorage.setItem(ICON_STORAGE_KEY, JSON.stringify(Object.fromEntries(iconSlots))); } catch { /* Optional preference only. */ }
+  }
+
+  function layoutDesktopIcons() {
+    if (matchMedia('(max-width: 650px)').matches || !iconGrid.clientWidth) return;
+    const maxCol = Math.max(0, Math.floor((iconGrid.clientWidth - 130) / ICON_CELL_WIDTH));
+    const maxRow = Math.max(0, Math.floor((iconGrid.clientHeight - 92) / ICON_CELL_HEIGHT));
+    const claimed = new Set();
+    CONFIG.apps.forEach(app => {
+      const requested = iconSlots.get(app.id) || { col: 0, row: 0 };
+      let col = Math.min(requested.col, maxCol);
+      let row = Math.min(requested.row, maxRow);
+      let key = `${col}:${row}`;
+      if (claimed.has(key)) {
+        outer: for (let nextRow = 0; nextRow <= maxRow; nextRow += 1) {
+          for (let nextCol = 0; nextCol <= maxCol; nextCol += 1) {
+            const candidate = `${nextCol}:${nextRow}`;
+            if (!claimed.has(candidate)) { col = nextCol; row = nextRow; key = candidate; break outer; }
+          }
+        }
+      }
+      claimed.add(key);
+      iconSlots.set(app.id, { col, row });
+      const icon = iconGrid.querySelector(`[data-app="${app.id}"]`);
+      if (icon) { icon.style.left = `${col * ICON_CELL_WIDTH}px`; icon.style.top = `${row * ICON_CELL_HEIGHT}px`; }
+    });
+    saveIconSlots();
+  }
+
+  function enableIconDragging(icon, appId) {
+    let drag = null;
+    const finishDrag = (event, cancelled = false) => {
+      if (!drag) return;
+      if (icon.hasPointerCapture(event.pointerId)) icon.releasePointerCapture(event.pointerId);
+      icon.classList.remove('dragging');
+      if (!drag.moved || cancelled) { layoutDesktopIcons(); drag = null; return; }
+
+      const maxCol = Math.max(0, Math.floor((iconGrid.clientWidth - icon.offsetWidth) / ICON_CELL_WIDTH));
+      const maxRow = Math.max(0, Math.floor((iconGrid.clientHeight - icon.offsetHeight) / ICON_CELL_HEIGHT));
+      const target = {
+        col: Math.max(0, Math.min(maxCol, Math.round(icon.offsetLeft / ICON_CELL_WIDTH))),
+        row: Math.max(0, Math.min(maxRow, Math.round(icon.offsetTop / ICON_CELL_HEIGHT))),
+      };
+      const occupying = [...iconSlots.entries()].find(([id, slot]) => id !== appId && slot.col === target.col && slot.row === target.row);
+      if (occupying) iconSlots.set(occupying[0], drag.origin);
+      iconSlots.set(appId, target);
+      icon.dataset.suppressClick = 'true';
+      window.setTimeout(() => { icon.dataset.suppressClick = 'false'; }, 250);
+      drag = null;
+      layoutDesktopIcons();
+    };
+
+    icon.addEventListener('pointerdown', event => {
+      if (matchMedia('(max-width: 650px)').matches || event.button !== 0) return;
+      const origin = iconSlots.get(appId) || { col: 0, row: 0 };
+      drag = { pointerX: event.clientX, pointerY: event.clientY, left: icon.offsetLeft, top: icon.offsetTop, origin: { ...origin }, moved: false };
+      icon.setPointerCapture(event.pointerId);
+    });
+    icon.addEventListener('pointermove', event => {
+      if (!drag || !icon.hasPointerCapture(event.pointerId)) return;
+      const deltaX = event.clientX - drag.pointerX;
+      const deltaY = event.clientY - drag.pointerY;
+      if (!drag.moved && Math.hypot(deltaX, deltaY) < 6) return;
+      drag.moved = true;
+      icon.classList.add('dragging');
+      icon.style.left = `${Math.max(0, Math.min(iconGrid.clientWidth - icon.offsetWidth, drag.left + deltaX))}px`;
+      icon.style.top = `${Math.max(0, Math.min(iconGrid.clientHeight - icon.offsetHeight, drag.top + deltaY))}px`;
+    });
+    icon.addEventListener('pointerup', event => finishDrag(event));
+    icon.addEventListener('pointercancel', event => finishDrag(event, true));
+  }
   function buildDesktop() {
     startButton.setAttribute('aria-expanded', 'false');
+    restoreIconSlots();
     CONFIG.apps.forEach(app => {
       const icon = document.createElement('button');
       icon.type = 'button';
@@ -231,10 +324,12 @@
       icon.dataset.app = app.id;
       icon.innerHTML = `<span class="icon-picture">${iconMarkup(app.icon)}</span><span class="icon-name">${app.label}</span>`;
       icon.addEventListener('click', () => {
+        if (icon.dataset.suppressClick === 'true') { icon.dataset.suppressClick = 'false'; return; }
         document.querySelectorAll('.desktop-icon').forEach(item => item.classList.remove('selected'));
         icon.classList.add('selected');
         openApp(app.id);
       });
+      enableIconDragging(icon, app.id);
       iconGrid.append(icon);
       const item = document.createElement('button');
       item.type = 'button';
@@ -265,9 +360,13 @@
   });
   $('#logoutButton').textContent = '🔄 Restart DoyleOS';
   $('#logoutButton').addEventListener('click', replayIntro);
-  addEventListener('resize', () => document.querySelectorAll('.app-window').forEach(clampWindow));
+  addEventListener('resize', () => {
+    document.querySelectorAll('.app-window').forEach(clampWindow);
+    layoutDesktopIcons();
+  });
   addEventListener('pagehide', clearTimers);
   buildDesktop();
+  layoutDesktopIcons();
   updateClock();
   setInterval(updateClock, 15000);
   startIntro();

@@ -10,7 +10,7 @@
 window.DOYLE_OS_CONFIG = {
   brand: {
     name: 'DoyleOS 98',
-    subtitle: 'Dare to Doyle'
+    subtitle: 'DareToDoyle'
   },
   login: {
     userName: 'Jacque',
@@ -18,7 +18,8 @@ window.DOYLE_OS_CONFIG = {
     startDelayMs: 320,
     keyDelayMs: 75,
     passwordDelayMs: 55,
-    loadingDurationMs: 720
+    // Duration of the visible "Opening DoyleOS..." loading phase.
+    loadingDurationMs: 4000
   },
   apps: [
     {
