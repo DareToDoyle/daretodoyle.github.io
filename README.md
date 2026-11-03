@@ -17,7 +17,36 @@ All owner-editable labels, descriptions, CTA text, destination URLs, branding, a
 
 ## Deployment
 
-This is a static site consisting of `index.html`, `styles.css`, `config.js`, `doyleos.js`, and `favicon.svg`. Deploy the repository root using the existing static-host configuration. Preserve the canonical domain and any provider-side DNS settings. No DNS or domain changes are required by DoyleOS.
+This is a static site consisting of `index.html`, `styles.css`, `config.js`,
+`doyleos.js`, and `favicon.svg`. No compile step or server runtime is required.
+
+The workflow at `.github/workflows/deploy.yml` publishes those active files to
+GitHub Pages whenever `main` is pushed. It also includes the root `CNAME` and
+`.nojekyll` files in the deployment artifact. The configured custom domain is:
+
+```text
+daretodoyle.com
+```
+
+In the GitHub repository, **Settings > Pages > Source** must be set to
+**GitHub Actions**. Existing DNS records should be preserved; this repository
+does not modify DNS. The workflow can also be started manually from the Actions
+tab with **Deploy DoyleOS to GitHub Pages > Run workflow**.
+
+## Active production files
+
+Only the following files are copied into the Pages artifact:
+
+- `index.html`
+- `styles.css`
+- `config.js`
+- `doyleos.js`
+- `favicon.svg`
+- `CNAME`
+- `.nojekyll`
+
+The older `app.js` prototype is retained in the repository for now but is not
+loaded by `index.html` or included in production.
 
 ## Reference policy
 
