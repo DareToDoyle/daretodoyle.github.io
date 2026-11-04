@@ -26,8 +26,7 @@ history.
    the library and previous/next order.
 3. Give every song a unique `id`, then set `defaultTrackId` to the song that
    should load when the player opens.
-4. Paste the exact Spotify track URL in `spotifyUrl`. It must look like
-   `https://open.spotify.com/track/TRACK_ID`.
+4. Add the numeric Deezer track ID as `previewId`.
 5. Optionally add `artwork`, `year`, and `note`. `artwork` can be a relative
    project path such as `media/song-name.jpg` or an HTTPS image URL. Put local
    artwork in a root `media/` folder; the deployment workflow copies that folder
@@ -40,19 +39,25 @@ Example:
   id: 'song1',
   title: 'Song title',
   artist: 'Artist name',
-  spotifyUrl: 'https://open.spotify.com/track/EXACT_TRACK_ID',
+  previewId: '123456789',
   artwork: 'media/song1.jpg',
   year: '2004',
   note: 'Why this one matters to me.'
 }
 ```
 
-Invalid and missing Spotify URLs remain visible in the library as unplayable
-entries. If `defaultTrackId` is missing or unplayable, DoyleOS loads the first
-valid song. DoyleOS asks Spotify to start the default favourite automatically
-when the app opens and provides its own genuine play/pause control through
-Spotify's iframe API. Browser autoplay rules may still require one press of the
-DoyleOS Play button, particularly in Safari.
+`previewId` is the numeric Deezer track ID for the song's 30-second preview.
+Invalid or missing preview IDs remain visible as unplayable entries. If
+`defaultTrackId` is missing or unplayable, DoyleOS loads
+the first valid preview. Playback uses a native audio element and the Web Audio
+API, so the record only spins while audio is actually playing and the
+visualiser is driven by the real waveform and frequency data. Browser autoplay
+rules may still require one press of Play.
+
+Preview URLs are resolved through the public SayaMusicAPI Cloudflare Worker set
+in `mediaPlayer.previewApiBase`. It is an external availability dependency; the
+project is MIT-licensed and can be self-hosted by replacing that one URL. No API
+key belongs in this public configuration file.
 
 ## Deployment
 
@@ -113,11 +118,10 @@ wallpapers are original DoyleOS artwork. The Green Hills theme is an homage and
 does not include Microsoft's Bliss image; its pixel-art bitmap was generated as
 an original DoyleOS asset from a user-supplied composition reference.
 
-## Spotify privacy
+## Media player privacy
 
-The Spotify embed is created only when a visitor deliberately opens Doyle Media
-Player. Spotify may independently use cookies or process device and playback
-information under its own privacy policy. DoyleOS does not add player analytics,
-accounts, submissions, playlists, playback-history storage, or media-player
-cookies/local-storage entries. Closing the app removes its iframe; minimising it
-keeps the current iframe alive so playback can continue where the browser allows.
+Audio previews and configured cover artwork are requested from Deezer through
+the services documented above. DoyleOS does not add player analytics, accounts,
+submissions, playlists, playback-history storage, or media-player
+cookies/local-storage entries. Closing the app stops its audio and releases its
+Web Audio resources; minimising it allows playback to continue.

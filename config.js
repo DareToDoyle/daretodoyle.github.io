@@ -11,7 +11,7 @@ window.DOYLE_OS_CONFIG = {
   brand: {
     name: 'DoyleOS 98',
     subtitle: 'DareToDoyle',
-    version: '1.3.0'
+    version: '1.4.1'
   },
   login: {
     userName: 'Jacque',
@@ -27,7 +27,7 @@ window.DOYLE_OS_CONFIG = {
     loadingDurationMs: 4000
   },
   legal: {
-    lastUpdated: '3 November 2026',
+    lastUpdated: '4 November 2026',
     operatorName: 'DareToDoyle'
   },
   analytics: {
@@ -36,10 +36,8 @@ window.DOYLE_OS_CONFIG = {
   /**
    * Doyle Media Player library.
    *
-   * Add, remove, or reorder objects in `songs` to curate the player. Spotify
-   * track links must use https://open.spotify.com/track/TRACK_ID. Leave a URL
-   * as null until you have the exact link; DoyleOS will show that entry as
-   * unavailable instead of guessing a destination.
+   * Add, remove, or reorder objects in `songs` to curate the player.
+   * `previewId` is the numeric Deezer track ID used for its 30-second preview.
    *
    * `artwork` may be a site-relative image path (for example
    * "media/my-song.jpg") or an HTTPS URL. It is optional.
@@ -48,16 +46,18 @@ window.DOYLE_OS_CONFIG = {
     enabled: true,
     appName: 'Doyle Media Player',
     defaultTrackId: 'master-of-puppets',
-    // DoyleOS asks Spotify to begin when the app opens. Some browsers may
-    // still require the visitor to press the DoyleOS play button once.
+    // Public SayaMusicAPI instance. Self-host the MIT-licensed Worker and
+    // replace this URL if the public service becomes unavailable.
+    previewApiBase: 'https://sayamusicapi.sayaproject-mailflow.workers.dev',
+    // Playback is attempted on open; browser autoplay rules may require Play.
     autoplay: true,
     songs: [
       {
         id: 'master-of-puppets',
         title: 'Master Of Puppets',
         artist: 'Metallica',
-        spotifyUrl: 'https://open.spotify.com/track/2MuWTIM3b0YEAskbeeFE1i?si=b3aa3f6b96e643d8',
-        artwork: 'https://image-cdn-fa.spotifycdn.com/image/ab67616d00001e02668e3aca3167e6e569a9aa20',
+        previewId: '424565232',
+        artwork: 'https://cdn-images.dzcdn.net/images/cover/291e2af9295ca885b154eee75dfa0432/250x250-000000-80-0-0.jpg',
         year: '',
         note: ''
       },
@@ -65,8 +65,8 @@ window.DOYLE_OS_CONFIG = {
         id: 'animal-i-have-become',
         title: 'Animal I Have Become',
         artist: 'Three Days Grace',
-        spotifyUrl: 'https://open.spotify.com/track/5eFxwmqKrHpSQDOEIFYlgY?si=c1051e645f4746b7',
-        artwork: 'https://image-cdn-fa.spotifycdn.com/image/ab67616d00001e02fa4c18fdbd1bf1a39b7b794f',
+        previewId: '10199904',
+        artwork: 'https://cdn-images.dzcdn.net/images/cover/2bda9b70f023c72f8afa9e3e673abeb4/250x250-000000-80-0-0.jpg',
         year: '',
         note: ''
       },
@@ -74,8 +74,8 @@ window.DOYLE_OS_CONFIG = {
         id: 'man-in-the-box',
         title: 'Man in the Box',
         artist: 'Alice In Chains',
-        spotifyUrl: 'https://open.spotify.com/track/6gZVQvQZOFpzIy3HblJ20F?si=728cd12c95d14d94',
-        artwork: 'https://image-cdn-fa.spotifycdn.com/image/ab67616d00001e023cf83c82a8e976d7b51e2d00',
+        previewId: '15523335',
+        artwork: 'https://cdn-images.dzcdn.net/images/cover/e35ea43ea08ab9a2fc3d542470acf47b/250x250-000000-80-0-0.jpg',
         year: '',
         note: ''
       },
@@ -83,8 +83,8 @@ window.DOYLE_OS_CONFIG = {
         id: 'counting-worms',
         title: 'Counting Worms',
         artist: 'Knocked Loose',
-        spotifyUrl: 'https://open.spotify.com/track/7g3OmlRZ15Gq5Lo3WBMol0?si=7e8182bc77fc49b3',
-        artwork: 'https://image-cdn-ak.spotifycdn.com/image/ab67616d00001e02f87207e3c1f0e58ab9dc84e2',
+        previewId: '3272621131',
+        artwork: 'https://cdn-images.dzcdn.net/images/cover/bc334f7c1f42ef3ce4e5fa1950f05a6f/250x250-000000-80-0-0.jpg',
         year: '',
         note: ''
       }

@@ -40,7 +40,6 @@
   const DESKTOP_APPS = CONFIG.mediaPlayer?.enabled === true ? [...CONFIG.apps, MEDIA_PLAYER_APP] : [...CONFIG.apps];
   const iconSlots = new Map(DESKTOP_APPS.map((app, index) => [app.id, { col: 0, row: index }]));
   let analyticsLoaded = false;
-  let spotifyIframeApiPromise = null;
 
   function readSystemSettings() {
     try {
@@ -251,15 +250,6 @@
     return String(value).replace(/[&<>'"]/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[character]);
   }
 
-  function spotifyTrackId(url) {
-    if (typeof url !== 'string' || !url.trim()) return null;
-    try {
-      const parsed = new URL(url);
-      const match = parsed.hostname === 'open.spotify.com' && parsed.pathname.match(/^\/track\/([A-Za-z0-9]{22})\/?$/);
-      return match ? match[1] : null;
-    } catch { return null; }
-  }
-
   function validArtwork(url) {
     if (typeof url !== 'string' || !url.trim()) return null;
     try {
@@ -281,7 +271,7 @@
         id,
         title: typeof song?.title === 'string' && song.title.trim() ? song.title.trim() : `Untitled track ${index + 1}`,
         artist: typeof song?.artist === 'string' && song.artist.trim() ? song.artist.trim() : 'Unknown artist',
-        spotifyUrl: typeof song?.spotifyUrl === 'string' ? song.spotifyUrl.trim() : '',
+        previewId: /^\d+$/.test(String(song?.previewId || '')) ? String(song.previewId) : '',
         artwork: typeof song?.artwork === 'string' ? song.artwork.trim() : '',
         year: song?.year ? String(song.year) : '',
         note: typeof song?.note === 'string' ? song.note.trim() : ''
@@ -297,34 +287,15 @@
       : `<span class="media-artwork-fallback${compact ? ' compact' : ''}" aria-hidden="true">&#9835;</span>`;
   }
 
-  function loadSpotifyIframeApi() {
-    if (spotifyIframeApiPromise) return spotifyIframeApiPromise;
-    spotifyIframeApiPromise = new Promise((resolve, reject) => {
-      window.onSpotifyIframeApiReady = api => resolve(api);
-      const existing = document.querySelector('script[data-spotify-iframe-api]');
-      if (existing) return;
-      const script = document.createElement('script');
-      script.src = 'https://open.spotify.com/embed/iframe-api/v1';
-      script.async = true;
-      script.dataset.spotifyIframeApi = 'true';
-      script.addEventListener('error', () => {
-        spotifyIframeApiPromise = null;
-        reject(new Error('Spotify player API could not be loaded.'));
-      }, { once: true });
-      document.body.append(script);
-    });
-    return spotifyIframeApiPromise;
-  }
-
   function mediaPlayerBody() {
     const songs = mediaSongs();
     const library = songs.length
       ? songs.map(song => {
-        const playable = Boolean(spotifyTrackId(song.spotifyUrl));
+        const playable = Boolean(song.previewId);
         return `<button type="button" class="media-library-track" data-media-track="${escapeHtml(song.id)}"${playable ? '' : ' disabled'} aria-label="${escapeHtml(playable ? `Play ${song.title} by ${song.artist}` : `${song.title} is unavailable`)}">
           <span class="media-track-thumb">${mediaArtwork(song, true)}</span>
           <span class="media-track-copy"><strong>${escapeHtml(song.title)}</strong><span>${escapeHtml(song.artist)}</span></span>
-          <span class="media-track-state">${playable ? '&#9654;' : 'Link needed'}</span>
+          <span class="media-track-state">${playable ? '&#9654;' : 'Preview unavailable'}</span>
         </button>`;
       }).join('')
       : `<div class="media-empty-library">No favourite songs yet. Add tracks in <code>config.js</code>.</div>`;
@@ -351,22 +322,19 @@
               <p class="media-note" data-media-note hidden></p>
             </div>
           </div>
-          <div class="media-visualiser" aria-label="Decorative retro visualisation">
+          <div class="media-visualiser" aria-label="Live visualisation of the playing audio">
             <div class="media-equaliser" aria-hidden="true">${equaliserBars}</div>
             <div class="media-wave" aria-hidden="true">${waveDots}</div>
-            <span>PLAYBACK VISUALISER</span>
+            <span>LIVE AUDIO VISUALISER</span>
           </div>
           <div class="media-transport" aria-label="Music controls">
             <button class="media-skip-button" type="button" data-media-previous aria-label="Previous favourite song">&#9198;</button>
             <button class="media-play-button" type="button" data-media-toggle disabled><span data-media-play-icon>&#9654;</span><span data-media-play-label>Starting...</span></button>
             <button class="media-skip-button" type="button" data-media-next aria-label="Next favourite song">&#9197;</button>
           </div>
-          <div class="media-embed" data-media-embed><div class="media-embed-message">Connecting to Spotify...</div></div>
-          <div class="media-actions">
-            <a class="win-button media-open-spotify" data-media-open target="_blank" rel="noopener noreferrer" hidden>Open in Spotify</a>
-            <span class="media-unavailable" data-media-unavailable>Spotify link unavailable</span>
-          </div>
-          <p class="media-third-party">The visualiser and record follow Spotify's reported play/pause state. Spotify may independently use cookies or process device data under its own privacy policy.</p>
+          <audio data-media-audio crossorigin="anonymous" preload="metadata"></audio>
+          <div class="media-time" data-media-time aria-live="off">0:00 / 0:30</div>
+          <p class="media-third-party">30-second audio previews are supplied by Deezer through SayaMusicAPI. The record and visualiser respond to the actual preview audio.</p>
         </section>
         <aside class="media-library" aria-labelledby="mediaLibraryTitle">
           <div class="media-library-heading"><span id="mediaLibraryTitle">MY FAVOURITE SONGS</span><small>${songs.length} songs</small></div>
@@ -378,30 +346,87 @@
 
   function bindMediaPlayer(win) {
     const songs = mediaSongs();
-    const playableSongs = songs.filter(song => spotifyTrackId(song.spotifyUrl));
+    const playableSongs = songs.filter(song => song.previewId);
     const root = win.querySelector('[data-media-player]');
     if (!root) return;
     let selectedId = '';
-    let controller = null;
     let destroyed = false;
+    let aborter = null;
+    let audioContext = null;
+    let analyser = null;
+    let sourceNode = null;
+    let animationFrame = 0;
+    let loadToken = 0;
     const wantsAutoplay = CONFIG.mediaPlayer?.autoplay === true;
-    const embed = root.querySelector('[data-media-embed]');
+    const audio = root.querySelector('[data-media-audio]');
     const status = root.querySelector('[data-media-status]');
     const playButton = root.querySelector('[data-media-toggle]');
     const playIcon = root.querySelector('[data-media-play-icon]');
     const playLabel = root.querySelector('[data-media-play-label]');
+    const record = root.querySelector('.media-record');
+    const timeLabel = root.querySelector('[data-media-time]');
+    const bars = [...root.querySelectorAll('.media-equaliser i')];
+    const waveDots = [...root.querySelectorAll('.media-wave i')];
+
+    const formatTime = value => {
+      const seconds = Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
+      return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+    };
+
+    const resetVisualiser = () => {
+      bars.forEach(bar => { bar.style.transform = 'scaleY(.08)'; });
+      waveDots.forEach(dot => { dot.style.transform = 'translateY(0)'; });
+    };
+
+    const drawVisualiser = () => {
+      if (destroyed || audio.paused || !analyser) return;
+      const frequency = new Uint8Array(analyser.frequencyBinCount);
+      const waveform = new Uint8Array(analyser.fftSize);
+      analyser.getByteFrequencyData(frequency);
+      analyser.getByteTimeDomainData(waveform);
+      bars.forEach((bar, index) => {
+        const start = Math.floor(index * frequency.length / bars.length);
+        const end = Math.max(start + 1, Math.floor((index + 1) * frequency.length / bars.length));
+        let total = 0;
+        for (let bin = start; bin < end; bin += 1) total += frequency[bin];
+        bar.style.transform = `scaleY(${Math.max(.08, total / (end - start) / 255).toFixed(3)})`;
+      });
+      waveDots.forEach((dot, index) => {
+        const sample = waveform[Math.floor(index * (waveform.length - 1) / Math.max(1, waveDots.length - 1))];
+        dot.style.transform = `translateY(${((sample - 128) / 128 * 28).toFixed(1)}px)`;
+      });
+      animationFrame = requestAnimationFrame(drawVisualiser);
+    };
+
+    const ensureAudioGraph = async () => {
+      if (!audioContext) {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContext) throw new Error('Web Audio is not supported by this browser.');
+        audioContext = new AudioContext();
+        analyser = audioContext.createAnalyser();
+        analyser.fftSize = 256;
+        analyser.smoothingTimeConstant = .72;
+        sourceNode = audioContext.createMediaElementSource(audio);
+        sourceNode.connect(analyser);
+        analyser.connect(audioContext.destination);
+      }
+      if (audioContext.state === 'suspended') await audioContext.resume();
+    };
 
     const showPlaybackState = (playing, buffering = false) => {
       root.classList.toggle('is-playing', playing);
       root.classList.toggle('is-buffering', buffering);
+      record.style.animationPlayState = playing ? 'running' : 'paused';
       playIcon.innerHTML = playing ? '&#10074;&#10074;' : '&#9654;';
       playLabel.textContent = playing ? 'Pause' : 'Play';
       status.textContent = buffering ? 'Buffering...' : (playing ? 'Now playing' : 'Ready - press Play');
+      cancelAnimationFrame(animationFrame);
+      if (playing) animationFrame = requestAnimationFrame(drawVisualiser);
+      else resetVisualiser();
     };
 
-    const selectSong = (song, playAfterLoad = true) => {
+    const selectSong = async (song, playAfterLoad = true) => {
       if (!song) return;
-      const trackId = spotifyTrackId(song.spotifyUrl);
       root.querySelector('[data-media-title]').textContent = song.title;
       root.querySelector('[data-media-artist]').textContent = song.artist;
       const year = root.querySelector('[data-media-year]');
@@ -412,28 +437,45 @@
       note.hidden = !song.note;
       root.querySelector('[data-media-artwork]').innerHTML = mediaArtwork(song);
       root.querySelectorAll('[data-media-track]').forEach(button => button.classList.toggle('selected', button.dataset.mediaTrack === song.id));
-      const openLink = root.querySelector('[data-media-open]');
-      const unavailable = root.querySelector('[data-media-unavailable]');
-      if (!trackId) {
-        if (!controller) embed.innerHTML = '<div class="media-embed-message">This song needs a valid Spotify track URL in <code>config.js</code>.</div>';
-        openLink.hidden = true;
-        unavailable.hidden = false;
-        status.textContent = 'Track unavailable';
+      selectedId = song.id;
+      aborter?.abort();
+      audio.pause();
+      audio.removeAttribute('src');
+      audio.load();
+      showPlaybackState(false, false);
+      timeLabel.textContent = '0:00 / 0:30';
+      if (!song.previewId) {
+        status.textContent = 'Preview unavailable';
         playButton.disabled = true;
-        root.classList.remove('is-playing', 'is-buffering');
-        selectedId = song.id;
         return;
       }
-      openLink.href = `https://open.spotify.com/track/${trackId}`;
-      openLink.hidden = false;
-      unavailable.hidden = true;
-      root.classList.remove('is-playing', 'is-buffering');
-      status.textContent = controller ? 'Loading song...' : 'Connecting to Spotify...';
-      if (controller) {
-        if (selectedId !== song.id) controller.loadEntity(song.spotifyUrl);
-        if (playAfterLoad) controller.play();
+      const token = ++loadToken;
+      aborter = new AbortController();
+      playButton.disabled = true;
+      status.textContent = 'Loading preview...';
+      try {
+        const base = String(CONFIG.mediaPlayer?.previewApiBase || '').replace(/\/$/, '');
+        const endpoint = `${base}/v1/media/stream?source=deezer&id=${encodeURIComponent(song.previewId)}`;
+        const response = await fetch(endpoint, { signal: aborter.signal, referrerPolicy: 'no-referrer' });
+        if (!response.ok) throw new Error(`Preview service returned ${response.status}.`);
+        const payload = await response.json();
+        const streamUrl = new URL(payload?.data?.streamUrl || '');
+        const trustedHost = streamUrl.protocol === 'https:' && (streamUrl.hostname === 'cdnt-preview.dzcdn.net' || streamUrl.hostname.endsWith('.dzcdn.net'));
+        if (!payload?.ok || !trustedHost) throw new Error('Preview service returned an invalid audio URL.');
+        if (destroyed || token !== loadToken) return;
+        audio.src = streamUrl.href;
+        audio.load();
+        playButton.disabled = false;
+        status.textContent = playAfterLoad ? 'Starting preview...' : 'Ready - press Play';
+        if (playAfterLoad) {
+          try { await ensureAudioGraph(); await audio.play(); }
+          catch { status.textContent = 'Ready - press Play'; }
+        }
+      } catch (error) {
+        if (error.name === 'AbortError' || destroyed || token !== loadToken) return;
+        status.textContent = 'Preview unavailable';
+        playButton.disabled = true;
       }
-      selectedId = song.id;
     };
 
     root.querySelectorAll('[data-media-track]').forEach(button => button.addEventListener('click', () => {
@@ -448,47 +490,41 @@
     root.querySelector('[data-media-next]').addEventListener('click', () => moveTrack(1));
     root.querySelectorAll('.media-skip-button').forEach(button => { button.disabled = playableSongs.length < 2; });
     playButton.addEventListener('click', () => {
-      if (!controller) return;
-      status.textContent = 'Changing playback...';
-      controller.togglePlay();
+      if (!audio.src) return;
+      if (audio.paused) {
+        status.textContent = 'Starting preview...';
+        ensureAudioGraph().then(() => audio.play()).catch(() => { status.textContent = 'Playback could not start'; });
+      } else audio.pause();
     });
 
     const favourite = playableSongs.find(song => song.id === CONFIG.mediaPlayer?.defaultTrackId) || playableSongs[0] || songs[0];
-    selectSong(favourite, false);
-
-    if (favourite && spotifyTrackId(favourite.spotifyUrl)) {
-      loadSpotifyIframeApi().then(api => {
-        if (destroyed || !win.isConnected) return;
-        api.createController(embed, { width: '100%', height: 152, url: favourite.spotifyUrl }, spotifyController => {
-          if (destroyed || !win.isConnected) { spotifyController.destroy(); return; }
-          controller = spotifyController;
-          playButton.disabled = false;
-          spotifyController.addListener('ready', () => {
-            if (destroyed) return;
-            status.textContent = wantsAutoplay ? 'Starting music...' : 'Ready - press Play';
-            if (wantsAutoplay) spotifyController.play();
-          });
-          spotifyController.addListener('playback_started', () => {
-            if (!destroyed) showPlaybackState(true, false);
-          });
-          spotifyController.addListener('playback_update', event => {
-            if (destroyed) return;
-            showPlaybackState(!event.data.isPaused && !event.data.isBuffering, event.data.isBuffering);
-          });
-        });
-      }).catch(() => {
-        if (destroyed) return;
-        status.textContent = 'Spotify player unavailable';
-        embed.innerHTML = '<div class="media-embed-message">Spotify could not be reached. Use Open in Spotify to listen.</div>';
-        playButton.disabled = true;
-      });
-    }
+    audio.addEventListener('play', () => showPlaybackState(true, false));
+    audio.addEventListener('pause', () => showPlaybackState(false, false));
+    audio.addEventListener('waiting', () => showPlaybackState(false, true));
+    audio.addEventListener('playing', () => showPlaybackState(true, false));
+    audio.addEventListener('timeupdate', () => { timeLabel.textContent = `${formatTime(audio.currentTime)} / ${formatTime(audio.duration || 30)}`; });
+    audio.addEventListener('ended', () => moveTrack(1));
+    audio.addEventListener('error', () => {
+      if (!destroyed && audio.src) { showPlaybackState(false, false); status.textContent = 'Audio preview could not be played'; }
+    });
+    resetVisualiser();
+    selectSong(favourite, wantsAutoplay);
 
     win._doyleMediaCleanup = () => {
       destroyed = true;
+      loadToken += 1;
+      aborter?.abort();
+      cancelAnimationFrame(animationFrame);
+      audio.pause();
+      audio.removeAttribute('src');
+      audio.load();
       root.classList.remove('is-playing', 'is-buffering');
-      if (controller) controller.destroy();
-      controller = null;
+      sourceNode?.disconnect();
+      analyser?.disconnect();
+      audioContext?.close();
+      sourceNode = null;
+      analyser = null;
+      audioContext = null;
     };
   }
 
@@ -606,8 +642,8 @@
       <p>When enabled, Google Analytics may process information such as page views, approximate location derived from IP address, browser and device details, session information, and interactions with the site. Google Analytics uses first-party identifiers such as the <code>_ga</code> cookie to distinguish visits and sessions.</p>
       <p>Advertising storage, Google Signals, and ad-personalisation features are disabled in this implementation.</p>
 
-      <h3>Spotify embedded content</h3>
-      <p>Doyle Media Player uses Spotify's official embedded player. The Spotify frame is only added after you deliberately open the Media Player app. Spotify may independently set cookies or process information such as your IP address, browser, device, and playback interactions under Spotify's own privacy policy. DoyleOS does not receive or store your listening history, selected song, playback state, or Spotify account details.</p>
+      <h3>Audio previews and external music links</h3>
+      <p>When you open Doyle Media Player, it requests configured 30-second Deezer preview audio through the third-party SayaMusicAPI service. Cover artwork is loaded from Deezer's image service. Those providers may receive technical request data such as your IP address, browser, and device information. DoyleOS does not store your listening history, selected song, playback state, or account details.</p>
 
       <h3>Consent and your choices</h3>
       <p>You can allow analytics, continue with essential storage only, or change your choice at any time. Choosing essential only blocks the Google tag completely. You can also clear this site's cookies and local storage through your browser.</p>
@@ -615,7 +651,8 @@
       <div class="legal-links">
         <a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer">Google Privacy Policy</a>
         <a href="https://support.google.com/analytics/answer/11593727" target="_blank" rel="noopener noreferrer">Google Analytics data collection</a>
-        <a href="https://www.spotify.com/legal/privacy-policy/" target="_blank" rel="noopener noreferrer">Spotify Privacy Policy</a>
+        <a href="https://www.deezer.com/legal/personal-datas" target="_blank" rel="noopener noreferrer">Deezer Privacy Policy</a>
+        <a href="https://github.com/shnwazdev/sayamusicapi" target="_blank" rel="noopener noreferrer">SayaMusicAPI source</a>
       </div>
 
       <h3>Changes to this notice</h3>
