@@ -78,7 +78,7 @@
     try { return localStorage.getItem(ANALYTICS_CONSENT_KEY); } catch { return null; }
   }
 
-  function loadAnalytics() {
+  function loadAnalytics(sendPageView = false) {
     if (!/^G-[A-Z0-9]+$/.test(CONFIG.analytics.measurementId)) return;
     gtag('consent', 'update', {
       ad_storage: 'denied',
@@ -86,6 +86,13 @@
       ad_personalization: 'denied',
       analytics_storage: 'granted',
     });
+    if (sendPageView) {
+      gtag('event', 'page_view', {
+        page_title: document.title,
+        page_location: location.href,
+        page_path: `${location.pathname}${location.search}`,
+      });
+    }
   }
 
   function showAnalyticsChoices() {
@@ -99,7 +106,7 @@
   function setAnalyticsConsent(choice) {
     try { localStorage.setItem(ANALYTICS_CONSENT_KEY, choice); } catch { /* Choice remains active for this page. */ }
     if (choice === 'granted') {
-      loadAnalytics();
+      loadAnalytics(true);
       hideAnalyticsChoices();
       return;
     }

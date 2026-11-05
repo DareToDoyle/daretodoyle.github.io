@@ -6,11 +6,15 @@
   <script>
     window.dataLayer = window.dataLayer || [];
     function gtag(){dataLayer.push(arguments);}
+    let analyticsConsent = 'denied';
+    try {
+      if (localStorage.getItem('doyleos-analytics-consent-v1') === 'granted') analyticsConsent = 'granted';
+    } catch (error) { /* Storage can be unavailable in privacy modes. */ }
     gtag('consent', 'default', {
       ad_storage: 'denied',
       ad_user_data: 'denied',
       ad_personalization: 'denied',
-      analytics_storage: 'denied'
+      analytics_storage: analyticsConsent
     });
   </script>
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-NHR1LC4P30"></script>
