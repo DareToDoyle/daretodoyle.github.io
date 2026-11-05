@@ -92,10 +92,10 @@ window.DOYLE_OS_CONFIG = {
   },
   apps: [
     {
-      id: 'about', label: 'About Me.txt', icon: 'document',
+      id: 'about', label: 'About.txt', icon: 'document',
       heading: 'Hello!',
       description: 'Welcome to DoyleOS, a place to put my work, interests and whatever I’m building next.',
-      cta: 'Learn more', url: null
+      cta: 'Explore', url: null
     },
     {
       id: 'linkedin', label: 'LinkedIn.exe', icon: 'linkedin',
