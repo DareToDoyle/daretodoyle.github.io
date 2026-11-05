@@ -103,10 +103,11 @@ Concept images and historical screenshots are design references only. They are n
 DoyleOS stores desktop icon positions and the visitor's analytics choice in
 browser local storage. The fake login does not submit or store credentials.
 
-Google Analytics 4 uses measurement ID `G-NHR1LC4P30`. It follows a basic
-consent implementation: `gtag.js` is not requested until the visitor explicitly
-chooses **Allow analytics**. **Essential only** keeps the Google tag blocked.
-Advertising storage, Google Signals, and ad-personalisation remain disabled.
+Google Analytics 4 uses measurement ID `G-NHR1LC4P30`. Its standard tag is
+installed directly in the HTML head with Consent Mode defaults set to denied
+before the tag loads. **Allow analytics** grants analytics storage;
+**Essential only** keeps analytics storage denied. Advertising storage, Google
+Signals, and ad-personalisation remain disabled.
 Visitors can reopen the choice from **Start > Privacy & Cookies**.
 
 ## DoyleOS settings

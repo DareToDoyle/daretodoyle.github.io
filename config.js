@@ -27,7 +27,7 @@ window.DOYLE_OS_CONFIG = {
     loadingDurationMs: 4000
   },
   legal: {
-    lastUpdated: '4 November 2026',
+    lastUpdated: '5 November 2026',
     operatorName: 'DareToDoyle'
   },
   analytics: {

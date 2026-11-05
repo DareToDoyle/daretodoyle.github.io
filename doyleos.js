@@ -39,7 +39,6 @@
   });
   const DESKTOP_APPS = CONFIG.mediaPlayer?.enabled === true ? [...CONFIG.apps, MEDIA_PLAYER_APP] : [...CONFIG.apps];
   const iconSlots = new Map(DESKTOP_APPS.map((app, index) => [app.id, { col: 0, row: index }]));
-  let analyticsLoaded = false;
 
   function readSystemSettings() {
     try {
@@ -72,38 +71,21 @@
   applySystemSettings(false);
 
   window.dataLayer = window.dataLayer || [];
-  function gtag() { window.dataLayer.push(arguments); }
+  const gtag = window.gtag || function () { window.dataLayer.push(arguments); };
   window.gtag = gtag;
-  gtag('consent', 'default', {
-    ad_storage: 'denied',
-    ad_user_data: 'denied',
-    ad_personalization: 'denied',
-    analytics_storage: 'denied',
-  });
 
   function readAnalyticsConsent() {
     try { return localStorage.getItem(ANALYTICS_CONSENT_KEY); } catch { return null; }
   }
 
   function loadAnalytics() {
-    if (analyticsLoaded || !/^G-[A-Z0-9]+$/.test(CONFIG.analytics.measurementId)) return;
-    analyticsLoaded = true;
+    if (!/^G-[A-Z0-9]+$/.test(CONFIG.analytics.measurementId)) return;
     gtag('consent', 'update', {
       ad_storage: 'denied',
       ad_user_data: 'denied',
       ad_personalization: 'denied',
       analytics_storage: 'granted',
     });
-    gtag('js', new Date());
-    gtag('config', CONFIG.analytics.measurementId, {
-      allow_google_signals: false,
-      allow_ad_personalization_signals: false,
-    });
-    const script = document.createElement('script');
-    script.async = true;
-    script.src = `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(CONFIG.analytics.measurementId)}`;
-    script.dataset.doyleosAnalytics = 'true';
-    document.head.append(script);
   }
 
   function showAnalyticsChoices() {
@@ -128,7 +110,6 @@
       analytics_storage: 'denied',
     });
     hideAnalyticsChoices();
-    if (analyticsLoaded) location.reload();
   }
 
   const iconMarkup = type => `<span class="retro-icon icon-${type}" aria-hidden="true"><i></i><b></b></span>`;
@@ -638,7 +619,7 @@
       <p>The desktop stores icon positions, display preferences, effects, cursor choice, and your analytics choice in your browser's local storage so they can be restored on the same device. These preferences stay in your browser and are not used by ${legal.operatorName} to identify you. You can remove them by clearing this site's browser data.</p>
 
       <h3>Google Analytics</h3>
-      <p>With your permission, this site uses Google Analytics 4 to understand visits and improve the experience. The Google Analytics tag is blocked until you choose <strong>Allow analytics</strong>.</p>
+      <p>This site uses Google Analytics 4 to understand visits and improve the experience. The Google tag loads with analytics storage denied. Analytics cookies and full measurement remain blocked until you choose <strong>Allow analytics</strong>; before that choice, Google may receive limited cookieless consent and measurement signals.</p>
       <p>When enabled, Google Analytics may process information such as page views, approximate location derived from IP address, browser and device details, session information, and interactions with the site. Google Analytics uses first-party identifiers such as the <code>_ga</code> cookie to distinguish visits and sessions.</p>
       <p>Advertising storage, Google Signals, and ad-personalisation features are disabled in this implementation.</p>
 
@@ -646,7 +627,7 @@
       <p>When you open Doyle Media Player, it requests configured 30-second Deezer preview audio through the third-party SayaMusicAPI service. Cover artwork is loaded from Deezer's image service. Those providers may receive technical request data such as your IP address, browser, and device information. DoyleOS does not store your listening history, selected song, playback state, or account details.</p>
 
       <h3>Consent and your choices</h3>
-      <p>You can allow analytics, continue with essential storage only, or change your choice at any time. Choosing essential only blocks the Google tag completely. You can also clear this site's cookies and local storage through your browser.</p>
+      <p>You can allow analytics, continue with essential storage only, or change your choice at any time. Choosing essential only keeps analytics storage denied. You can also clear this site's cookies and local storage through your browser.</p>
       <button class="win-button privacy-settings-button" type="button" data-action="analytics-settings">Change analytics choice</button>
       <div class="legal-links">
         <a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer">Google Privacy Policy</a>
