@@ -9,12 +9,12 @@
  */
 window.DOYLE_OS_CONFIG = {
   brand: {
-    name: 'DoyleOS 98',
+    name: 'DoyleOS',
     subtitle: 'DareToDoyle',
     version: '1.4.1'
   },
   login: {
-    userName: 'Jacque',
+    userName: 'Administrator',
     // Visual bullets only. This is not a credential or real password.
     simulatedPassword: '••••••••',
     startDelayMs: 320,
@@ -44,7 +44,7 @@ window.DOYLE_OS_CONFIG = {
    */
   mediaPlayer: {
     enabled: true,
-    appName: 'Doyle Media Player',
+    appName: 'D2D Media Player',
     defaultTrackId: 'master-of-puppets',
     // Public SayaMusicAPI instance. Self-host the MIT-licensed Worker and
     // replace this URL if the public service becomes unavailable.
@@ -93,39 +93,33 @@ window.DOYLE_OS_CONFIG = {
   apps: [
     {
       id: 'about', label: 'About Me.txt', icon: 'document',
-      heading: 'Hi, I’m Jacque.',
-      description: 'Welcome to DoyleOS — a little corner of the internet for my work, interests and whatever I’m building next.',
+      heading: 'Hello!',
+      description: 'Welcome to DoyleOS, a place to put my work, interests and whatever I’m building next.',
       cta: 'Learn more', url: null
     },
     {
       id: 'linkedin', label: 'LinkedIn.exe', icon: 'linkedin',
       heading: 'LinkedIn',
       description: 'My professional profile, experience and the technology I work with. Mostly Microsoft 365, automation and building useful digital tools.',
-      cta: 'Open LinkedIn', url: null
+      cta: 'Open LinkedIn', url: "https://www.linkedin.com/in/jacque-doyle-pearce-856360314/"
     },
     {
       id: 'instagram', label: 'Instagram.exe', icon: 'camera',
       heading: 'Instagram',
-      description: 'Photos, travel, life updates and the occasional questionable decision.',
-      cta: 'Open Instagram', url: null
+      description: 'Where I post the occasional photo or story.',
+      cta: 'Open Instagram', url: "https://www.instagram.com/daretodoyle/"
     },
     {
       id: 'projects', label: 'Projects', icon: 'folder',
       heading: 'Projects',
-      description: 'A collection of things I’ve built, experimented with or worked on. More projects coming soon.',
-      cta: 'View projects', url: null
-    },
-    {
-      id: 'fitness', label: 'Fitness Tracker', icon: 'fitness',
-      heading: 'Fitness Tracker',
-      description: 'Training, big walks, challenges and fitness milestones.',
-      cta: 'View fitness profile', url: null
+      description: 'A collection of things I’ve built, experimented with or worked on. More to come!.',
+      cta: 'View projects [Coming Soon]', url: null
     },
     {
       id: 'contact', label: 'Contact.exe', icon: 'mail',
       heading: 'Contact',
-      description: 'Want to get in touch? Reach out for a conversation, collaboration or just to say hello.',
-      cta: 'Get in touch', url: null
+      description: 'Want to get in touch? Reach out to me on discord where I will respond as soon as I can.',
+      cta: 'Get in touch', url: "https://discordapp.com/users/122075799464574976"
     }
   ]
 };

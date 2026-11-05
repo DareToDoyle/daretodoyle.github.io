@@ -664,9 +664,11 @@
     if (app.id === 'settings') return settingsBody();
     if (app.id === 'media-player') return mediaPlayerBody();
     const destination = validDestination(app.url);
-    const cta = destination
-      ? `<a class="win-button open-link" href="${destination}" target="_blank" rel="noopener noreferrer">↗ &nbsp; ${app.cta}</a>`
-      : `<span class="win-button open-link disabled" aria-disabled="true">${app.cta}: Link coming soon</span>`;
+    const cta = app.id === 'about'
+      ? `<button class="win-button open-link" type="button" data-action="close-app">${app.cta}</button>`
+      : destination
+        ? `<a class="win-button open-link" href="${destination}" target="_blank" rel="noopener noreferrer">↗ &nbsp; ${app.cta}</a>`
+        : `<span class="win-button open-link disabled" aria-disabled="true">${app.cta}: Link coming soon</span>`;
     const main = app.id === 'about'
       ? `<div class="about-layout"><div class="pixel-avatar" aria-label="Original pixel-style avatar"><i></i></div><div><h2>${app.heading}</h2><p>${app.description}</p></div></div>`
       : `<h2>${app.heading}</h2><p>${app.description}</p>`;
@@ -729,6 +731,7 @@
     win.querySelector('[data-action="close"]').addEventListener('click', () => closeWindow(win));
     win.querySelector('[data-action="min"]').addEventListener('click', () => minimiseWindow(win));
     win.querySelector('[data-action="max"]').addEventListener('click', () => toggleMaximise(win));
+    win.querySelector('[data-action="close-app"]')?.addEventListener('click', () => closeWindow(win));
     win.querySelector('[data-action="analytics-settings"]')?.addEventListener('click', showAnalyticsChoices);
     if (id === 'settings') bindSettingsControls(win);
     if (id === 'media-player') bindMediaPlayer(win);
