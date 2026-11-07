@@ -13,7 +13,7 @@ All owner-editable labels, descriptions, CTA text, destination URLs, branding, a
 - Destination URLs intentionally default to `null`. A null destination renders a disabled **Link coming soon** button.
 - Use exact `https://` URLs, or a validated `mailto:` URL for Contact.
 - Never add credentials or secrets; `config.js` is public.
-- Adjust the values under `login` to change the intro timing.
+- Adjust the values under `login` to change the intro timing and sound-effect volumes.
 
 ## Configure Doyle Media Player
 

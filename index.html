@@ -37,7 +37,8 @@
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <title>DoyleOS | DareToDoyle</title>
   <style>
-    html.doyleos-booting body { margin: 0; overflow: hidden; background: #008080; }
+    html.doyleos-booting, html.doyleos-booting * { cursor: none !important; }
+    html.doyleos-booting body { margin: 0; overflow: hidden; background: #008080; pointer-events: none; user-select: none; touch-action: none; }
     html.doyleos-booting .desktop { display: none !important; }
     html.doyleos-booting .login-screen { position: fixed; z-index: 1000; inset: 0; }
   </style>
@@ -50,23 +51,22 @@
         <div class="title-bar"><span>Welcome to DoyleOS</span></div>
         <div class="login-body">
           <div class="brand-row">
-            <div class="computer-icon" aria-hidden="true"><span>☺</span></div>
+            <img class="login-logo" src="d2d-logo-pixel.svg" alt="" aria-hidden="true" draggable="false">
             <div>
               <h1 id="loginTitle">DoyleOS <small>v1.0</small></h1>
-              <p>A personal operating system<br>by DareToDoyle.</p>
+              <p>Created by DareToDoyle.</p>
             </div>
           </div>
           <div class="rule"></div>
           <form id="loginForm" aria-describedby="loginNotice">
             <label>User name: <input id="username" type="text" value="" readonly tabindex="-1" autocomplete="one-time-code" inputmode="none" data-1p-ignore data-lpignore="true" data-form-type="other" aria-label="Simulated user name"></label>
             <label>Password: <input id="password" type="text" value="" readonly tabindex="-1" autocomplete="one-time-code" inputmode="none" data-1p-ignore data-lpignore="true" data-form-type="other" aria-label="Simulated password bullets"></label>
-            <button class="win-button login-button" type="submit" aria-pressed="false"><span class="play">▶</span> Sign In</button>
+            <button class="win-button login-button" type="button" aria-pressed="false" aria-disabled="true" tabindex="-1"><span class="play">▶</span> Sign In</button>
           </form>
           <p class="signing" id="signingText" aria-live="polite">Preparing login…</p>
           <p class="sr-only" id="loginNotice">This is a visual introduction only. It does not collect or transmit credentials.</p>
           <div class="login-footer">
             <div class="progress" role="progressbar" aria-label="Loading DoyleOS desktop" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i></i></div>
-            <button class="win-button skip-button" id="skipButton" type="button">Skip intro »</button>
           </div>
         </div>
       </div>

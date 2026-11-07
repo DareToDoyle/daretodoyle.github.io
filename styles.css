@@ -57,9 +57,7 @@ button { color: #050505; }
 .brand-row h1 { margin: 0; font-family: "Courier New", monospace; font-size: clamp(34px, 7vw, 48px); line-height: 1; }
 .brand-row h1 small { font: 700 22px var(--font); white-space: nowrap; }
 .brand-row p { margin: 8px 0 0; font-size: 16px; }
-.computer-icon { width: 112px; height: 87px; position: relative; flex: 0 0 auto; background: #ddd; border: 5px outset #eee; transform: perspective(70px) rotateX(2deg); }
-.computer-icon::after { content: ""; position: absolute; left: -14px; right: -14px; bottom: -24px; height: 18px; background: #ddd; border: 4px outset #eee; transform: skewX(-12deg); }
-.computer-icon span { display: grid; place-items: center; margin: 12px auto; width: 56px; height: 43px; border: 6px inset #ddd; background: #00e; color: yellow; font: 32px/1 monospace; }
+.login-logo { width: 170px; height: 170px; margin: -29px; flex: 0 0 auto; object-fit: contain; image-rendering: pixelated; }
 .rule { height: 2px; margin: 31px 0 20px; border-top: 2px groove #fff; }
 #loginForm { display: grid; gap: 12px; }
 #loginForm label { display: grid; grid-template-columns: 120px 1fr; align-items: center; font-size: 16px; font-weight: 700; }
@@ -68,13 +66,12 @@ button { color: #050505; }
 .win-button:active, .win-button.active { border-style: inset; padding: 7px 12px 3px 16px; }
 .login-button.is-pressed { border-style: inset; padding: 7px 12px 3px 16px; transform: translate(1px, 1px); }
 .win-button:focus-visible, input:focus-visible, .desktop-icon:focus-visible { outline: 2px dotted #000; outline-offset: -5px; }
-.login-button { width: 230px; margin: 10px auto 0; font-size: 20px; }
+.login-button { width: 230px; margin: 10px auto 0; font-size: 20px; pointer-events: none; user-select: none; }
 .play { color: #00a72d; text-shadow: 1px 1px #000; }
 .signing { min-height: 20px; margin: 10px 0 8px; text-align: center; }
-.login-footer { display: flex; align-items: center; justify-content: space-between; gap: 48px; }
+.login-footer { display: flex; align-items: center; }
 .progress { width: 220px; height: 22px; padding: 2px; border: 3px inset #eee; background: #fff; overflow: hidden; }
 .progress i { display: block; width: 0; height: 100%; background: repeating-linear-gradient(90deg, #0000a8 0 12px, transparent 12px 15px); transition: width 90ms steps(1, end); }
-.skip-button { white-space: nowrap; font-weight: 400; }
 
 .desktop { padding-top: 49px; }
 .icon-grid { position: absolute; z-index: 2; top: 64px; left: 20px; bottom: 64px; width: 145px; display: grid; grid-auto-rows: 102px; align-content: start; gap: 2px; }
@@ -123,16 +120,17 @@ button { color: #050505; }
 .start-items button, #logoutButton { display: block; width: 100%; padding: 11px 10px; border: 0; background: transparent; text-align: left; font-size: 16px; }
 .start-items button:hover, #logoutButton:hover { color: #fff; background: var(--blue); }
 #logoutButton { grid-column: 2; align-self: end; border-top: 2px groove #fff; }
+.start-programs { position: relative; }
 .start-programs > button b { margin-left: auto; font-size: 12px; }
-.programs-menu { margin: 0 5px 4px 18px; border: 2px inset #eee; background: var(--panel); }
+.programs-menu { position: absolute; z-index: 3; top: -3px; left: calc(100% - 1px); width: 250px; max-height: min(430px, calc(100dvh - 70px)); padding: 3px; overflow-y: auto; border: 3px outset #eee; background: var(--silver); box-shadow: 3px 3px #000; }
+.programs-menu[hidden] { display: none; }
 .programs-menu button { min-height: 48px; }
 
 @media (max-width: 650px) {
   .screen-label, .desktop-label { height: 39px; font-size: 23px; }
   .login-body { padding: 24px 18px 20px; }
   .brand-row { gap: 14px; }
-  .computer-icon { width: 80px; height: 67px; }
-  .computer-icon span { width: 43px; height: 34px; margin-top: 8px; font-size: 24px; }
+  .login-logo { width: 122px; height: 122px; margin: -21px; }
   .brand-row h1 { font-size: 31px; }
   .brand-row h1 small { font-size: 17px; }
   .brand-row p { font-size: 15px; }
@@ -196,7 +194,7 @@ html, body, #app { height: 100%; height: 100dvh; }
 .app-window[hidden] { display: none !important; }
 .app-window[data-maximized="true"] .window-content { height: calc(100% - 48px); overflow: auto; }
 .taskbar { height: calc(50px + env(safe-area-inset-bottom)); padding-bottom: calc(4px + env(safe-area-inset-bottom)); }
-.start-menu { bottom: calc(48px + env(safe-area-inset-bottom)); max-height: calc(100dvh - 62px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); overflow: auto; }
+.start-menu { bottom: calc(48px + env(safe-area-inset-bottom)); max-height: calc(100dvh - 62px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); overflow: visible; }
 .start-items button, #logoutButton { display: flex; align-items: center; gap: 12px; min-height: 46px; }
 .start-items .menu-separator { margin-top: 5px; border-top: 2px groove #fff; }
 .task-button { display: flex; align-items: center; gap: 5px; }
@@ -219,10 +217,7 @@ html, body, #app { height: 100%; height: 100dvh; }
 .cookie-consent__actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
 .cookie-consent__actions .win-button { min-height: 42px; }
 .cookie-consent__allow { color: #fff; background: var(--blue); border-color: #fff #444 #444 #fff; }
-.pixel-avatar { position: relative; aspect-ratio: 1; overflow: hidden; border: 3px inset #eee; background: linear-gradient(#6fa0df 0 72%, #758199 72%); image-rendering: pixelated; }
-.pixel-avatar::before { content: ""; position: absolute; width: 55%; height: 59%; left: 23%; top: 22%; background: #e6a36a; box-shadow: -12px -13px 0 #38271f, 0 -19px 0 #38271f, 12px -10px 0 #38271f, -20px 2px 0 #38271f, 5px 38px 0 #4b2b20, -5px 38px 0 #4b2b20; }
-.pixel-avatar::after { content: ""; position: absolute; left: 35%; top: 45%; width: 8px; height: 8px; background: #111; box-shadow: 35px 0 #111, 13px 24px 0 4px #4b2b20; }
-.pixel-avatar i { position: absolute; left: 17%; right: 12%; bottom: -7%; height: 36%; background: #202d47; clip-path: polygon(18% 0, 78% 0, 100% 100%, 0 100%); }
+.about-photo { display: block; width: 100%; aspect-ratio: 1; object-fit: cover; border: 3px inset #eee; background: #777; }
 
 /* Small original CSS-drawn retro icons; no screenshot or third-party assets. */
 .retro-icon { position: relative; display: inline-block; flex: 0 0 auto; width: 38px; height: 34px; vertical-align: middle; filter: drop-shadow(2px 2px 0 #111); image-rendering: pixelated; }
@@ -339,6 +334,8 @@ html:not(.effects-pixel) .retro-icon, html:not(.effects-pixel) .desktop-logo, ht
 html.cursor-classic body, html.cursor-classic button, html.cursor-classic a { cursor: default; }
 html.cursor-crosshair body, html.cursor-crosshair button, html.cursor-crosshair a, html.cursor-crosshair input { cursor: crosshair !important; }
 html.cursor-hand body, html.cursor-hand button, html.cursor-hand a, html.cursor-hand input { cursor: pointer !important; }
+html.doyleos-booting, html.doyleos-booting * { cursor: none !important; }
+html.doyleos-booting body { pointer-events: none; user-select: none; touch-action: none; }
 
 /* Windows-style Settings app */
 .app-window[data-window="settings"] { width: min(760px, calc(100vw - 210px)); }
@@ -454,6 +451,7 @@ html.cursor-hand body, html.cursor-hand button, html.cursor-hand a, html.cursor-
   .app-window .window-content { height: calc(100% - 52px); }
   .about-layout { grid-template-columns: 92px 1fr; }
   .start-menu { width: min(330px, calc(100% - 10px)); }
+  .programs-menu { position: fixed; top: auto; right: 5px; bottom: calc(48px + env(safe-area-inset-bottom)); left: 47px; width: auto; max-height: calc(100dvh - 62px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); }
   .open-link { min-width: 0; width: 100%; min-height: 44px; }
   .tray { padding-inline: 7px; }
   .cookie-consent { right: 7px; bottom: calc(57px + env(safe-area-inset-bottom)); width: calc(100vw - 14px); }
@@ -499,7 +497,7 @@ html.cursor-hand body, html.cursor-hand button, html.cursor-hand a, html.cursor-
   .tray { min-width: 82px; }
   .start-button { padding-inline: 8px; }
   .brand-row { gap: 9px; }
-  .computer-icon { transform: scale(.82); margin-inline: -8px; }
+  .login-logo { width: 110px; height: 110px; margin: -15px; }
   .login-body { padding-inline: 10px; }
   #loginForm label { grid-template-columns: 88px 1fr; font-size: 14px; }
 }

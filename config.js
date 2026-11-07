@@ -24,7 +24,14 @@ window.DOYLE_OS_CONFIG = {
     beforeLoadingDelayMs: 380,
     buttonPressDurationMs: 240,
     // Duration of the visible "Opening DoyleOS..." loading phase.
-    loadingDurationMs: 4000
+    loadingDurationMs: 3000,
+    soundEffects: {
+      enabled: true,
+      keyboardVolume: 0.42,
+      mouseVolume: 0.52,
+      welcomeVolume: 0.22,
+      appVolume: 0.18
+    }
   },
   legal: {
     lastUpdated: '5 November 2026',
@@ -92,19 +99,19 @@ window.DOYLE_OS_CONFIG = {
   },
   apps: [
     {
-      id: 'about', label: 'About.txt', icon: 'document',
+      id: 'about', label: 'About', icon: 'document',
       heading: 'Hello!',
       description: 'Welcome to DoyleOS, a place to put my work, interests and whatever I’m building next.',
       cta: 'Explore', url: null
     },
     {
-      id: 'linkedin', label: 'LinkedIn.exe', icon: 'linkedin',
+      id: 'linkedin', label: 'LinkedIn', icon: 'linkedin',
       heading: 'LinkedIn',
       description: 'My professional profile, experience and the technology I work with. Mostly Microsoft 365, automation and building useful digital tools.',
       cta: 'Open LinkedIn', url: "https://www.linkedin.com/in/jacque-doyle-pearce-856360314/"
     },
     {
-      id: 'instagram', label: 'Instagram.exe', icon: 'camera',
+      id: 'instagram', label: 'Instagram', icon: 'camera',
       heading: 'Instagram',
       description: 'Where I post the occasional photo or story.',
       cta: 'Open Instagram', url: "https://www.instagram.com/daretodoyle/"
@@ -112,11 +119,11 @@ window.DOYLE_OS_CONFIG = {
     {
       id: 'projects', label: 'Projects', icon: 'folder',
       heading: 'Projects',
-      description: 'A collection of things I’ve built, experimented with or worked on. More to come!.',
+      description: 'A collection of things I’ve built, experimented with or worked on. More to come!',
       cta: 'View projects [Coming Soon]', url: null
     },
     {
-      id: 'contact', label: 'Contact.exe', icon: 'mail',
+      id: 'contact', label: 'Contact', icon: 'mail',
       heading: 'Contact',
       description: 'Want to get in touch? Reach out to me on discord where I will respond as soon as I can.',
       cta: 'Get in touch', url: "https://discordapp.com/users/122075799464574976"

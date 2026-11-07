@@ -6,7 +6,6 @@
   const $ = selector => document.querySelector(selector);
   const loginScreen = $('#loginScreen');
   const desktop = $('#desktop');
-  const loginForm = $('#loginForm');
   const username = $('#username');
   const password = $('#password');
   const signingText = $('#signingText');
@@ -21,7 +20,10 @@
   const startMenu = $('#startMenu');
   const cookieConsent = $('#cookieConsent');
   const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
+  const AudioContextConstructor = window.AudioContext || window.webkitAudioContext;
   const timeoutIds = new Set();
+  let soundContext = null;
+  let soundResumePending = false;
   let animationFrame = 0;
   let introRun = 0;
   let transitioning = false;
@@ -133,6 +135,176 @@
     introRun += 1;
     transitioning = false;
   }
+  function requestSoundContext() {
+    if (CONFIG.login.soundEffects?.enabled === false || !AudioContextConstructor) return null;
+    if (!soundContext) soundContext = new AudioContextConstructor();
+    if (soundContext.state === 'suspended' && !soundResumePending) {
+      soundResumePending = true;
+      soundContext.resume().catch(() => {}).finally(() => { soundResumePending = false; });
+    }
+    return soundContext;
+  }
+  function runningSoundContext() {
+    const context = requestSoundContext();
+    return context?.state === 'running' ? context : null;
+  }
+  function playNoiseImpact(context, options) {
+    const start = context.currentTime + (options.delay || 0);
+    const frameCount = Math.max(2, Math.ceil(context.sampleRate * options.duration));
+    const buffer = context.createBuffer(1, frameCount, context.sampleRate);
+    const samples = buffer.getChannelData(0);
+    const decayFrames = Math.max(1, context.sampleRate * options.decay);
+    for (let index = 0; index < frameCount; index += 1) {
+      const envelope = Math.exp(-index / decayFrames);
+      samples[index] = ((Math.random() * 2) - 1) * envelope;
+    }
+    samples[0] = 1;
+
+    const source = context.createBufferSource();
+    const filter = context.createBiquadFilter();
+    const gain = context.createGain();
+    source.buffer = buffer;
+    filter.type = options.filterType;
+    filter.frequency.setValueAtTime(options.frequency, start);
+    filter.Q.setValueAtTime(options.q || 0.8, start);
+    gain.gain.setValueAtTime(options.volume, start);
+    gain.gain.exponentialRampToValueAtTime(0.0001, start + options.duration);
+    source.connect(filter).connect(gain).connect(context.destination);
+    source.start(start);
+    source.stop(start + options.duration);
+  }
+  function playKeyClick(position, character) {
+    const context = runningSoundContext();
+    if (!context) return;
+    const volume = Math.max(0, Math.min(1, Number(CONFIG.login.soundEffects?.keyboardVolume) || 0.42));
+    const variation = (position * 41 + character.charCodeAt(0) * 17) % 240;
+    playNoiseImpact(context, {
+      duration: 0.018,
+      decay: 0.005,
+      filterType: 'highpass',
+      frequency: 1900 + variation,
+      q: 0.7,
+      volume
+    });
+    playNoiseImpact(context, {
+      delay: 0.003,
+      duration: 0.06,
+      decay: 0.021,
+      filterType: 'bandpass',
+      frequency: 620 + (variation * 0.45),
+      q: 0.7,
+      volume: volume * 0.68
+    });
+  }
+  function playMouseClick(releasing = false) {
+    const context = runningSoundContext();
+    if (!context) return;
+    const volume = Math.max(0, Math.min(1, Number(CONFIG.login.soundEffects?.mouseVolume) || 0.52));
+    playNoiseImpact(context, {
+      duration: releasing ? 0.016 : 0.022,
+      decay: releasing ? 0.004 : 0.006,
+      filterType: 'highpass',
+      frequency: releasing ? 2500 : 1750,
+      q: 0.9,
+      volume: volume * (releasing ? 0.58 : 1)
+    });
+    playNoiseImpact(context, {
+      delay: releasing ? 0.002 : 0.003,
+      duration: releasing ? 0.034 : 0.055,
+      decay: releasing ? 0.011 : 0.02,
+      filterType: 'bandpass',
+      frequency: releasing ? 980 : 540,
+      q: 0.8,
+      volume: volume * (releasing ? 0.34 : 0.65)
+    });
+  }
+  function playUiClick() {
+    const context = requestSoundContext();
+    if (!context) return;
+    const play = () => {
+      playMouseClick();
+      setTimeout(() => playMouseClick(true), 65);
+    };
+    if (context.state === 'running') play();
+    else context.resume().then(play).catch(() => {});
+  }
+  function playAppTransition(opening) {
+    const context = requestSoundContext();
+    if (!context) return;
+    if (context.state !== 'running') {
+      context.resume().then(() => playAppTransition(opening)).catch(() => {});
+      return;
+    }
+    const volume = Math.max(0, Math.min(1, Number(CONFIG.login.soundEffects?.appVolume) || 0.18));
+    const frequencies = opening ? [392, 587.33] : [587.33, 392];
+    const transitionStart = context.currentTime;
+    frequencies.forEach((frequency, index) => {
+      const start = transitionStart + (index * 0.105);
+      const end = start + 0.28;
+      const tone = context.createOscillator();
+      const accent = context.createOscillator();
+      const toneGain = context.createGain();
+      const accentGain = context.createGain();
+
+      tone.type = 'sine';
+      tone.frequency.setValueAtTime(frequency, start);
+      accent.type = 'triangle';
+      accent.frequency.setValueAtTime(frequency * 2, start);
+
+      toneGain.gain.setValueAtTime(0.0001, start);
+      toneGain.gain.linearRampToValueAtTime(volume * 0.5, start + 0.012);
+      toneGain.gain.exponentialRampToValueAtTime(0.0001, end);
+      accentGain.gain.setValueAtTime(0.0001, start);
+      accentGain.gain.linearRampToValueAtTime(volume * 0.08, start + 0.008);
+      accentGain.gain.exponentialRampToValueAtTime(0.0001, start + 0.16);
+
+      tone.connect(toneGain).connect(context.destination);
+      accent.connect(accentGain).connect(context.destination);
+      tone.start(start);
+      accent.start(start);
+      tone.stop(end);
+      accent.stop(end);
+    });
+  }
+  function playWelcomeChime() {
+    const context = runningSoundContext();
+    if (!context) return;
+    const volume = Math.max(0, Math.min(1, Number(CONFIG.login.soundEffects?.welcomeVolume) || 0.22));
+    const chimeStart = context.currentTime;
+    const notes = [
+      { frequency: 523.25, delay: 0, duration: 0.72, level: 0.42 },
+      { frequency: 659.25, delay: 0.18, duration: 0.76, level: 0.38 },
+      { frequency: 783.99, delay: 0.37, duration: 0.82, level: 0.36 },
+      { frequency: 1046.5, delay: 0.58, duration: 0.82, level: 0.46 }
+    ];
+    notes.forEach(note => {
+      const start = chimeStart + note.delay;
+      const end = start + note.duration;
+      const fundamental = context.createOscillator();
+      const shimmer = context.createOscillator();
+      const fundamentalGain = context.createGain();
+      const shimmerGain = context.createGain();
+
+      fundamental.type = 'sine';
+      fundamental.frequency.setValueAtTime(note.frequency, start);
+      shimmer.type = 'triangle';
+      shimmer.frequency.setValueAtTime(note.frequency * 2, start);
+
+      fundamentalGain.gain.setValueAtTime(0.0001, start);
+      fundamentalGain.gain.linearRampToValueAtTime(volume * note.level, start + 0.025);
+      fundamentalGain.gain.exponentialRampToValueAtTime(0.0001, end);
+      shimmerGain.gain.setValueAtTime(0.0001, start);
+      shimmerGain.gain.linearRampToValueAtTime(volume * note.level * 0.14, start + 0.018);
+      shimmerGain.gain.exponentialRampToValueAtTime(0.0001, start + (note.duration * 0.72));
+
+      fundamental.connect(fundamentalGain).connect(context.destination);
+      shimmer.connect(shimmerGain).connect(context.destination);
+      fundamental.start(start);
+      shimmer.start(start);
+      fundamental.stop(end);
+      shimmer.stop(end);
+    });
+  }
   function typeValue(input, value, delay, run, done) {
     let position = 0;
     const rhythm = [1, .78, 1.16, .9, 1.28, .84];
@@ -142,6 +314,7 @@
     const typeNext = () => {
       if (run !== introRun) return;
       input.value = value.slice(0, ++position);
+      playKeyClick(position, value[position - 1]);
       if (position < value.length) {
         later(typeNext, Math.round(delay * rhythm[(position - 1) % rhythm.length]));
       } else {
@@ -156,10 +329,13 @@
     signingText.textContent = 'Signing in…';
     loginButton.classList.add('is-pressed');
     loginButton.setAttribute('aria-pressed', 'true');
+    playMouseClick();
     later(() => {
       if (run !== introRun) return;
       loginButton.classList.remove('is-pressed');
       loginButton.setAttribute('aria-pressed', 'false');
+      playMouseClick(true);
+      playWelcomeChime();
       done();
     }, CONFIG.login.buttonPressDurationMs);
   }
@@ -177,6 +353,7 @@
     progressBar.style.width = '0%';
     progressTrack.setAttribute('aria-valuenow', '0');
     signingText.textContent = 'Preparing login…';
+    requestSoundContext();
     later(() => typeValue(username, CONFIG.login.userName, CONFIG.login.keyDelayMs, run, () => {
       later(() => typeValue(password, CONFIG.login.simulatedPassword, CONFIG.login.passwordDelayMs, run, () => {
         password.blur();
@@ -222,7 +399,7 @@
   }
   function replayIntro() {
     closeStartMenu();
-    [...document.querySelectorAll('.app-window')].forEach(closeWindow);
+    [...document.querySelectorAll('.app-window')].forEach(win => closeWindow(win, true));
     desktop.hidden = true;
     loginScreen.hidden = false;
     startIntro();
@@ -658,7 +835,7 @@
         ? `<a class="win-button open-link" href="${destination}" target="_blank" rel="noopener noreferrer">↗ &nbsp; ${app.cta}</a>`
         : `<span class="win-button open-link disabled" aria-disabled="true">${app.cta}: Link coming soon</span>`;
     const main = app.id === 'about'
-      ? `<div class="about-layout"><div class="pixel-avatar" aria-label="Original pixel-style avatar"><i></i></div><div><h2>${app.heading}</h2><p>${app.description}</p></div></div>`
+      ? `<div class="about-layout"><img class="about-photo" src="about-photo.png" alt="Jacque taking a mirror selfie in a lift"><div><h2>${app.heading}</h2><p>${app.description}</p></div></div>`
       : `<h2>${app.heading}</h2><p>${app.description}</p>`;
     return `${main}<div class="app-divider"></div>${cta}`;
   }
@@ -725,9 +902,11 @@
     if (id === 'media-player') bindMediaPlayer(win);
     makeDraggable(win);
     focusWindow(win);
+    playAppTransition(true);
   }
-  function closeWindow(win) {
+  function closeWindow(win, silent = false) {
     if (!win?.dataset) return;
+    if (!silent) playAppTransition(false);
     if (win.dataset.window === 'media-player') {
       win._doyleMediaCleanup?.();
       win.querySelectorAll('iframe').forEach(frame => { frame.src = 'about:blank'; frame.remove(); });
@@ -897,21 +1076,22 @@
       enableIconDragging(icon, app.id);
       iconGrid.append(icon);
     });
-    if (CONFIG.mediaPlayer?.enabled === true) {
-      const programs = document.createElement('div');
-      programs.className = 'start-programs';
-      programs.innerHTML = `<button type="button" data-programs-toggle aria-expanded="false">${iconMarkup('folder')}<span>Programs</span><b aria-hidden="true">&#9654;</b></button><div class="programs-menu" data-programs-menu hidden><button type="button" data-program-app="media-player">${iconMarkup('media')}<span>${escapeHtml(MEDIA_PLAYER_APP.label)}</span></button></div>`;
-      const programsToggle = programs.querySelector('[data-programs-toggle]');
-      const programsMenu = programs.querySelector('[data-programs-menu]');
-      programsToggle.addEventListener('click', () => {
-        const opening = programsMenu.hidden;
-        programsMenu.hidden = !opening;
-        programsToggle.setAttribute('aria-expanded', String(opening));
-        if (opening) programsMenu.querySelector('button')?.focus();
-      });
-      programs.querySelector('[data-program-app="media-player"]').addEventListener('click', () => openApp('media-player'));
-      startItems.append(programs);
-    }
+    const programs = document.createElement('div');
+    programs.className = 'start-programs';
+    const programItems = DESKTOP_APPS.map(app => `<button type="button" role="menuitem" data-program-app="${escapeHtml(app.id)}">${iconMarkup(app.icon)}<span>${escapeHtml(app.label)}</span></button>`).join('');
+    programs.innerHTML = `<button type="button" data-programs-toggle aria-haspopup="menu" aria-expanded="false">${iconMarkup('folder')}<span>Programs</span><b aria-hidden="true">&#9654;</b></button><div class="programs-menu" role="menu" aria-label="Programs" data-programs-menu hidden>${programItems}</div>`;
+    const programsToggle = programs.querySelector('[data-programs-toggle]');
+    const programsMenu = programs.querySelector('[data-programs-menu]');
+    programsToggle.addEventListener('click', () => {
+      const opening = programsMenu.hidden;
+      programsMenu.hidden = !opening;
+      programsToggle.setAttribute('aria-expanded', String(opening));
+      if (opening) programsMenu.querySelector('button')?.focus();
+    });
+    programsMenu.querySelectorAll('[data-program-app]').forEach(button => {
+      button.addEventListener('click', () => openApp(button.dataset.programApp));
+    });
+    startItems.append(programs);
     const about = document.createElement('button');
     about.type = 'button';
     about.className = 'menu-separator';
@@ -933,12 +1113,11 @@
     $('#clock').textContent = new Intl.DateTimeFormat([], { hour: 'numeric', minute: '2-digit' }).format(new Date());
   }
 
-  loginForm.addEventListener('submit', event => {
-    event.preventDefault();
-    pressSignIn(introRun, () => loadDesktop(introRun));
-  });
-  $('#skipButton').addEventListener('click', () => showDesktop(introRun));
   startButton.addEventListener('click', event => { event.stopPropagation(); toggleStartMenu(); });
+  document.addEventListener('click', event => {
+    const control = event.target.closest('button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), [role="button"]');
+    if (control && !loginScreen.contains(control)) playUiClick();
+  });
   document.addEventListener('pointerdown', event => { if (!event.target.closest('.start-menu, .start-button')) closeStartMenu(); });
   document.addEventListener('keydown', event => {
     if ((event.ctrlKey || event.metaKey) && ['+', '=', '-', '_', '0'].includes(event.key)) {
